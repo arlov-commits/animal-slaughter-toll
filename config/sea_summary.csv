@@ -1,0 +1,8 @@
+﻿category,group,fishery,sentience_tier,year,low,high,unit,is_subset,counts_in_total,source,note
+Wild-caught fish,fish,wild_capture,finfish,2022,787000000000,2328000000000,individuals,False,True,"fishcount 2024, Animal Welfare; 2007-2016 avg, extended 2003-2022",Caught from the wild in commercial fishing. ~half used for reduction to fishmeal/oil (see feed-fish footnote).
+Farmed fish,fish,aquaculture,finfish,2022,86000000000,181000000000,individuals,False,True,"fishcount 2023/2025, Animal Welfare",Finfish slaughtered for food. Up nine-fold since 1990. 2022 central ~133B.
+Farmed crustaceans,decapod,aquaculture,decapod,2022,310000000000,950000000000,individuals,False,True,fishcount 2025,"Decapod crustaceans (shrimp, prawns, crayfish, crabs, lobsters). 2022 central ~630B. Shrimp/prawns 230-780B; crayfish/crabs/lobsters 82-170B."
+Farmed bivalves,mollusc,aquaculture,bivalve,2022,360000000000,900000000000,individuals,False,True,fishcount 2025,"Mussels, oysters, clams, scallops. Sentience an OPEN question (filter-feeders, often sessile). 2022 central within 700B mollusc total."
+Farmed gastropods,mollusc,aquaculture,gastropod,2022,4100000000,8800000000,individuals,False,True,fishcount 2025,Snails etc. Part of 2022 mollusc total.
+Farmed molluscs (unnamed),mollusc,aquaculture,mollusc_other,2022,31000000000,95000000000,individuals,False,True,fishcount 2025,Mollusca NEI not otherwise classified. Part of 2022 mollusc total.
+Feed fish (wild-caught for reduction),fish,wild_capture_reduction,finfish,2016,460000000000,1100000000000,individuals,True,False,fishcount 2019; based on 2010 data,"FOOTNOTE ONLY - NOT added to total. A SUBSET of wild-caught fish, ground into fishmeal/oil mostly to feed farmed fish. ~half of all wild catch."
