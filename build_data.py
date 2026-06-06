@@ -122,7 +122,7 @@ def main():
             "reference_years": years_used,
             "primary_year": max(years_used),
             "generated": dt.date.today().isoformat(),
-            "breaths_per_second": 15,
+            "breaths_per_minute": 15,
             "note": "Land animals slaughtered for food worldwide. The FAO "
             "'China' aggregate is excluded to avoid double counting. Most "
             "series are "

@@ -345,8 +345,8 @@
     var perHour   = perDay/24;
     var perMinute = perHour/60;
     var perSec    = annual/SECONDS_PER_YEAR;
-    var bps       = (DATA && DATA.meta.breaths_per_second) || 15;
-    var perBreath = perSec/bps;
+    var bpm       = (DATA && DATA.meta.breaths_per_minute) || 15;
+    var perBreath = perMinute/bpm;
     return [
       ["Every year", commas(annual), ""],
       ["Every month", commas(perMonth), ""],
@@ -354,7 +354,7 @@
       ["Every hour", commas(perHour), ""],
       ["Every minute", commas(perMinute), ""],
       ["Every second", commas(perSec), ""],
-      ["Every breath", commas(perBreath), "at " + bps + " breaths per second"]
+      ["Every breath", commas(perBreath), "at " + bpm + " breaths per minute"]
     ];
   }
 
@@ -573,7 +573,7 @@
       "the UN Food and Agriculture Organization's record of animals slaughtered for meat, " + yrText + ". " +
       "Worldwide, that is <b style=\"color:var(--ink-soft)\">" + commas(DATA.world_total) + "</b> land animals in a single year.";
     document.getElementById("breathNote").textContent =
-      "“Per breath” uses a placeholder of " + m.breaths_per_second + " breaths per second.";
+      "“Per breath” uses a placeholder of " + m.breaths_per_minute + " breaths per minute.";
     document.getElementById("genLine").textContent = "Data compiled " + m.generated + ".";
 
     applyScope("__world__");
