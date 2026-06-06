@@ -284,11 +284,26 @@
   @keyframes strain-soft{
     0%{transform:none}40%{transform:translateY(1px) scale(.98)}100%{transform:none}
   }
+  .stopwrap{position:relative;flex:none}
   .stopmsg{
-    color:var(--muted);font-style:italic;font-size:.95rem;line-height:1.5;
-    margin:.85rem 0 0;max-width:38rem;
+    position:absolute;top:calc(100% + .6rem);right:0;z-index:60;margin:0;
+    width:min(24rem,82vw);
+    background:#15141a;border:1px solid var(--line-strong);border-radius:3px;
+    box-shadow:0 14px 40px rgba(0,0,0,.55);
+    padding:.72rem .95rem;
+    color:var(--ink-soft);font-style:italic;font-size:.92rem;line-height:1.5;
+    text-align:left;pointer-events:none;
   }
   .stopmsg[hidden]{display:none}
+  .stopmsg::before{
+    content:"";position:absolute;bottom:100%;right:1.4rem;
+    border:7px solid transparent;border-bottom-color:#15141a;
+  }
+  @media (max-width:34rem){
+    .stopwrap{flex-basis:100%;display:flex;justify-content:center}
+    .stopmsg{left:50%;right:auto;transform:translateX(-50%);width:min(21rem,88vw);text-align:center}
+    .stopmsg::before{left:50%;right:auto;transform:translateX(-50%)}
+  }
 
   /* ---- section frame ---- */
   section{margin:0 0 3.4rem}
@@ -400,7 +415,7 @@
 <main>
   <div class="topbar">
     <p class="kicker">A live memorial</p>
-    <span class="version" id="version">v1.5</span>
+    <span class="version" id="version">v1.6</span>
   </div>
   <h1>Killed for food</h1>
 
@@ -423,9 +438,11 @@
     <div class="rule"></div>
     <div class="sub-row">
       <p class="sub"><b id="sinceOpen">0</b> have been killed since you opened this page.</p>
-      <button class="stopbtn" id="stopBtn" type="button">Stop the killing</button>
+      <span class="stopwrap">
+        <button class="stopbtn" id="stopBtn" type="button">Stop the killing</button>
+        <span class="stopmsg" id="stopMsg" role="status" aria-live="polite" hidden></span>
+      </span>
     </div>
-    <p class="stopmsg" id="stopMsg" role="status" aria-live="polite" hidden></p>
     <p class="subline" id="subline"></p>
     <div class="experiments" id="experiments">
       <span class="exp-label">counter</span>
