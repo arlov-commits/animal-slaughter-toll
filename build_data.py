@@ -10,10 +10,10 @@ Method (kept deliberately conservative and reproducible):
   * The FAO area "China" (code 351) is an aggregate of China mainland,
     Hong Kong, Macao and Taiwan, all of which are also present as their own
     rows. We DROP code 351 so nothing is counted twice.
-  * For each species we use its most recent year that has any data anywhere
-    in the world (2024 for almost everything; 2017 for the two negligible
-    "game" / "other mammals" series). This is the latest full picture FAO
-    publishes.
+  * We anchor every series to 2023, the latest complete year. (FAO's 2024
+    figures are still being revised and are treated as incomplete.) The two
+    negligible "game" / "other mammals" series stop in 2017, so they fall
+    back to their own most recent year.
   * A country's figure for a species is its value in that same reference
     year (absent = 0). Country figures therefore sum exactly to the world
     total.
@@ -26,6 +26,7 @@ from collections import defaultdict
 SRC = "animals_killed_by_species_country_year.csv"
 OUT = "data.json"
 CHINA_AGGREGATE = 351  # drop: equals mainland + HK + Macao + Taiwan
+TARGET_YEAR = 2023      # anchor year; 2024 is still treated as incomplete
 
 # Plain-language names; FAO uses terse / mixed singular labels.
 DISPLAY = {
@@ -66,11 +67,15 @@ def main():
                 continue
             rows.append(r)
 
-    # Reference year per species = latest year with any data.
-    ref_year = defaultdict(int)
+    # Reference year per species = TARGET_YEAR when present, else that
+    # species' latest year (covers the two series that end in 2017).
+    years_avail = defaultdict(set)
     for r in rows:
-        sp = r["species"]
-        ref_year[sp] = max(ref_year[sp], int(r["year"]))
+        years_avail[r["species"]].add(int(r["year"]))
+    ref_year = {
+        sp: (TARGET_YEAR if TARGET_YEAR in ys else max(ys))
+        for sp, ys in years_avail.items()
+    }
 
     world = defaultdict(float)                      # species -> count
     by_country = defaultdict(lambda: defaultdict(float))  # country -> species -> count

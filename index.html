@@ -279,51 +279,75 @@
   .pace li:first-child .howmany{color:var(--ink)}
   .pace li:first-child .when{color:var(--ink)}
 
-  /* ---- species ---- */
-  .species{list-style:none;margin:0;padding:0}
-  .sp{border-bottom:1px solid var(--line)}
-  .sp-row{
+  /* ---- species: KPI / metric cards ---- */
+  .species{
+    list-style:none;margin:0;padding:0;
     display:grid;
-    grid-template-columns:1fr auto;
-    align-items:baseline;
-    gap:.4rem 1rem;
-    padding:.72rem 0 .5rem;
-    cursor:pointer;
+    grid-template-columns:repeat(auto-fill,minmax(15.5rem,1fr));
+    gap:.85rem;
+    align-items:start;
   }
-  .sp-row.nodrill{cursor:default}
-  .sp .name{
-    font-size:1.12rem;color:var(--ink);letter-spacing:.01em;
-    display:flex;align-items:baseline;gap:.55rem;
+  .sp{
+    border:1px solid var(--line);
+    border-radius:4px;
+    background:linear-gradient(180deg,rgba(233,228,218,.018),transparent);
+    padding:.95rem 1.05rem 1.05rem;
   }
-  .sp .tw{
-    color:var(--faint);font-size:.85rem;width:.8em;display:inline-block;
+  .sp.open{border-color:var(--line-strong)}
+  .kpi-head{
+    display:flex;align-items:baseline;justify-content:space-between;gap:.6rem;
+  }
+  .sp.drillable .kpi-head{cursor:pointer}
+  .kpi-name{
+    font-size:1.06rem;color:var(--ink);letter-spacing:.01em;
+    display:flex;align-items:baseline;gap:.5rem;
+  }
+  .kpi-name .tw{
+    color:var(--faint);font-size:.82rem;width:.7em;display:inline-block;
     transition:transform .25s ease,color .2s;
   }
-  .sp.open .tw{transform:rotate(90deg);color:var(--muted)}
-  .sp-row.nodrill .tw{visibility:hidden}
-  .sp .count{
-    font-size:1.12rem;color:var(--ink);font-variant-numeric:tabular-nums;
-    text-align:right;white-space:nowrap;
+  .sp.open .kpi-name .tw{transform:rotate(90deg);color:var(--muted)}
+  .kpi-share{
+    color:var(--muted);font-size:.82rem;font-style:italic;flex:none;
+    font-variant-numeric:tabular-nums;
   }
-  .sp .meta{
-    grid-column:1 / -1;
-    display:flex;align-items:center;gap:.8rem;
-    color:var(--muted);font-size:.82rem;
-  }
-  .sp .share{font-variant-numeric:tabular-nums;font-style:italic;min-width:3.4em}
   .bar{
-    position:relative;height:2px;flex:1;background:var(--line);overflow:hidden;
+    position:relative;height:2px;margin:.7rem 0 .9rem;
+    background:var(--line);overflow:hidden;
   }
   .bar i{
     position:absolute;left:0;top:0;bottom:0;display:block;
     background:linear-gradient(90deg,var(--ox-soft),var(--ox));
     min-width:1px;
   }
+  .kpi-big{
+    font-size:clamp(1.2rem,3.7vw,1.62rem);
+    line-height:1.05;color:var(--ink);white-space:nowrap;
+    font-variant-numeric:lining-nums tabular-nums;
+  }
+  .kpi-cap{
+    color:var(--muted);font-size:.7rem;letter-spacing:.13em;
+    text-transform:uppercase;margin:.32rem 0 0;
+  }
+  .kpi-stats{
+    margin:.95rem 0 0;padding:.8rem 0 .05rem;
+    border-top:1px solid var(--line);
+    display:flex;flex-direction:column;gap:.4rem;
+  }
+  .kpi-stat{
+    display:flex;align-items:baseline;justify-content:space-between;gap:.8rem;
+  }
+  .kpi-stat dt{color:var(--muted);font-size:.86rem;letter-spacing:.01em}
+  .kpi-stat dd{
+    margin:0;color:var(--ink-soft);font-size:.95rem;text-align:right;
+    font-variant-numeric:tabular-nums;white-space:nowrap;
+  }
+  .kpi-stat dd.live{color:var(--ink)}
   .drill{
     overflow:hidden;height:0;
     transition:height .32s ease;
   }
-  .drill-inner{padding:.2rem 0 1rem}
+  .drill-inner{padding:.85rem 0 .1rem;margin-top:.6rem;border-top:1px solid var(--line)}
   .drill table{width:100%;border-collapse:collapse}
   .drill td{
     padding:.34rem 0;border-bottom:1px solid var(--line);
@@ -352,7 +376,7 @@
   @media (prefers-reduced-motion:reduce){
     main{animation:none;opacity:1}
     .drill{transition:none}
-    .sp .tw{transition:none}
+    .kpi-name .tw{transition:none}
     .tip,.tgl,.tgl .dot,.info-mark{transition:none}
   }
 </style>
@@ -361,7 +385,7 @@
 <main>
   <div class="topbar">
     <p class="kicker">A live memorial</p>
-    <span class="version" id="version">v1.7</span>
+    <span class="version" id="version">v1.8</span>
   </div>
   <h1>Killed for food</h1>
 
@@ -522,37 +546,57 @@
     activeSpecies.forEach(function(s){
       var share = total ? s.count/total : 0;
       var li = document.createElement("li");
-      li.className = "sp";
+      li.className = "sp" + (isWorld ? " drillable" : "");
 
-      var row = document.createElement("div");
-      row.className = "sp-row" + (isWorld ? "" : " nodrill");
-
-      var name = document.createElement("div");
-      name.className = "name";
-      var tw = document.createElement("span"); tw.className="tw"; tw.textContent="›";
+      // header — species name (with drill chevron in world scope) and share
+      var head = document.createElement("div");
+      head.className = "kpi-head";
+      var name = document.createElement("span");
+      name.className = "kpi-name";
+      if(isWorld){
+        var tw = document.createElement("span"); tw.className="tw"; tw.textContent="›";
+        name.appendChild(tw);
+      }
       var nm = document.createElement("span"); nm.textContent = s.name;
-      name.appendChild(tw); name.appendChild(nm);
+      name.appendChild(nm);
+      var shareEl = document.createElement("span");
+      shareEl.className = "kpi-share";
+      shareEl.textContent = (share*100 >= 0.1 ? (share*100).toFixed(1) : (share*100).toFixed(2)) + "%";
+      head.appendChild(name); head.appendChild(shareEl);
+      li.appendChild(head);
 
-      var count = document.createElement("div");
-      count.className = "count";
-
-      var meta = document.createElement("div");
-      meta.className = "meta";
-      var sh = document.createElement("span");
-      sh.className = "share";
-      sh.textContent = (share*100 >= 0.1 ? (share*100).toFixed(1) : (share*100).toFixed(2)) + "%";
+      // proportion bar
       var bar = document.createElement("div");
       bar.className = "bar";
       var fill = document.createElement("i");
       fill.style.width = Math.max(0.4, (s.count/maxCount)*100) + "%";
       bar.appendChild(fill);
-      meta.appendChild(sh); meta.appendChild(bar);
+      li.appendChild(bar);
 
-      row.appendChild(name); row.appendChild(count); row.appendChild(meta);
-      li.appendChild(row);
+      // the metric: killed so far this year (live, Flowing/Ticking)
+      var big = document.createElement("div");
+      big.className = "kpi-big";
+      var cap = document.createElement("div");
+      cap.className = "kpi-cap";
+      cap.textContent = "killed so far this year";
+      li.appendChild(big); li.appendChild(cap);
 
-      // live per-second tick for this species (since year start)
-      speciesCounters.push({ el: count, perSecond: s.count/SECONDS_PER_YEAR });
+      // secondary stats — since opened, and the annual reference figure
+      var stats = document.createElement("dl");
+      stats.className = "kpi-stats";
+      var s1 = document.createElement("div"); s1.className = "kpi-stat";
+      var k1 = document.createElement("dt"); k1.textContent = "Since you opened";
+      var v1 = document.createElement("dd"); v1.className = "live"; v1.textContent = "0";
+      s1.appendChild(k1); s1.appendChild(v1);
+      var s2 = document.createElement("div"); s2.className = "kpi-stat";
+      var k2 = document.createElement("dt"); k2.textContent = "A year (" + s.year + ")";
+      var v2 = document.createElement("dd"); v2.textContent = commas(s.count);
+      s2.appendChild(k2); s2.appendChild(v2);
+      stats.appendChild(s1); stats.appendChild(s2);
+      li.appendChild(stats);
+
+      // live per-second tick: the big "so far this year" and "since opened"
+      speciesCounters.push({ bigEl: big, openEl: v1, perSecond: s.count/SECONDS_PER_YEAR });
 
       if(isWorld){
         var drill = document.createElement("div");
@@ -563,7 +607,7 @@
         li.appendChild(drill);
 
         var built = false;
-        row.addEventListener("click", function(){
+        head.addEventListener("click", function(){
           var open = li.classList.toggle("open");
           if(open && !built){
             buildDrill(inner, s);
@@ -627,7 +671,7 @@
       var arr = [];
       DATA.species.forEach(function(s){
         var v = c.by_species[s.id];
-        if(v && v > 0) arr.push({ id:s.id, name:s.name, count:v });
+        if(v && v > 0) arr.push({ id:s.id, name:s.name, count:v, year:s.year });
       });
       arr.sort(function(a,b){ return b.count-a.count; });
       active = arr;
@@ -700,7 +744,8 @@
 
     for(var i=0;i<speciesCounters.length;i++){
       var sc = speciesCounters[i];
-      sc.el.textContent = commas(sc.perSecond * yearSec);
+      sc.bigEl.textContent = commas(sc.perSecond * yearSec);
+      sc.openEl.textContent = commas(sc.perSecond * openSec);
     }
   }
 
