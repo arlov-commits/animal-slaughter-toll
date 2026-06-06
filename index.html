@@ -252,6 +252,44 @@
   }
   .hero .sub b{font-weight:500;color:var(--ink);font-variant-numeric:tabular-nums}
 
+  /* "Stop the killing" control + escalating message */
+  .sub-row{
+    display:flex;align-items:baseline;justify-content:space-between;
+    gap:.7rem 1.5rem;flex-wrap:wrap;max-width:46rem;
+  }
+  .sub-row .sub{flex:1 1 18rem}
+  .stopbtn{
+    -webkit-appearance:none;appearance:none;cursor:pointer;flex:none;
+    font-family:var(--serif);font-size:.95rem;letter-spacing:.02em;
+    color:var(--ink-soft);background:transparent;
+    border:1px solid var(--line-strong);border-radius:2px;
+    padding:.36rem .9rem;white-space:nowrap;
+    transition:color .2s,border-color .2s,background .2s;
+  }
+  .stopbtn:hover{color:var(--ink);border-color:var(--muted);background:rgba(233,228,218,.03)}
+  .stopbtn:focus-visible{outline:none;border-color:var(--ink-soft)}
+  .stopbtn.linked{color:var(--ink-soft);border-color:var(--line)}
+  .stopbtn.linked::after{content:"↗";margin-left:.45em;color:var(--muted);font-size:.85em}
+  .stopbtn.straining{animation:strain .3s ease-in-out}
+  @keyframes strain{
+    0%{transform:none}
+    12%{transform:translateY(1px) scale(.985)}
+    24%{transform:translateY(1px) translateX(-3px) scale(.985)}
+    38%{transform:translateY(1px) translateX(3px) scale(.985)}
+    52%{transform:translateY(1px) translateX(-2px) scale(.985)}
+    66%{transform:translateY(1px) translateX(2px) scale(.985)}
+    80%{transform:translateY(1px) scale(.985)}
+    100%{transform:none}
+  }
+  @keyframes strain-soft{
+    0%{transform:none}40%{transform:translateY(1px) scale(.98)}100%{transform:none}
+  }
+  .stopmsg{
+    color:var(--muted);font-style:italic;font-size:.95rem;line-height:1.5;
+    margin:.85rem 0 0;max-width:38rem;
+  }
+  .stopmsg[hidden]{display:none}
+
   /* ---- section frame ---- */
   section{margin:0 0 3.4rem}
   .sec-head{
@@ -354,6 +392,7 @@
     .drill{transition:none}
     .sp .tw{transition:none}
     .tip,.tgl,.tgl .dot,.info-mark{transition:none}
+    .stopbtn.straining{animation-name:strain-soft}
   }
 </style>
 </head>
@@ -361,7 +400,7 @@
 <main>
   <div class="topbar">
     <p class="kicker">A live memorial</p>
-    <span class="version" id="version">v1.4</span>
+    <span class="version" id="version">v1.5</span>
   </div>
   <h1>Killed for food</h1>
 
@@ -382,7 +421,11 @@
     <div class="counter" id="bigCounter" aria-live="off">—</div>
     <p class="bigsub" id="bigSub" hidden><span class="n" id="bigSubNum"></span><span class="word" id="bigSubWord"></span></p>
     <div class="rule"></div>
-    <p class="sub"><b id="sinceOpen">0</b> have been killed since you opened this page.</p>
+    <div class="sub-row">
+      <p class="sub"><b id="sinceOpen">0</b> have been killed since you opened this page.</p>
+      <button class="stopbtn" id="stopBtn" type="button">Stop the killing</button>
+    </div>
+    <p class="stopmsg" id="stopMsg" role="status" aria-live="polite" hidden></p>
     <p class="subline" id="subline"></p>
     <div class="experiments" id="experiments">
       <span class="exp-label">counter</span>
@@ -415,6 +458,7 @@
 <script>
 (function(){
   "use strict";
+  var ACTION_URL = "https://animalequality.org/how-you-can-help/"; // placeholder — advocacy/action page
   var SECONDS_PER_YEAR = 365.2425 * 86400; // 31,556,952
   var reduceMotion = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
@@ -751,6 +795,35 @@
     function reflect(btn,on){ btn.setAttribute("aria-checked", on ? "true" : "false"); }
     reflect(tO,opts.subOpened);
     tO.addEventListener("click", function(){ opts.subOpened=!opts.subOpened; reflect(tO,opts.subOpened); saveOpts(); setSublineMode(); tick(true); });
+
+    // "Stop the killing" — three-click interaction. In-memory only; it never
+    // touches the counter, which keeps streaming throughout.
+    var stopBtn = document.getElementById("stopBtn");
+    var stopMsg = document.getElementById("stopMsg");
+    var STOP_MESSAGES = [
+      "The counter didn't stop. One hand can't hold back a machine this large.",
+      "It's still running. It will keep running whether or not you look away.",
+      "One person stopping can't. People together can."
+    ];
+    var stopClicks = 0;
+    stopBtn.addEventListener("animationend", function(){ stopBtn.classList.remove("straining"); });
+    stopBtn.addEventListener("click", function(){
+      if(stopClicks >= 3){ window.open(ACTION_URL, "_blank"); return; }
+      stopClicks++;
+      stopMsg.hidden = false;
+      stopMsg.textContent = STOP_MESSAGES[stopClicks-1];
+      if(stopClicks === 2){
+        // the single theatrical beat: the button strains and fails. The
+        // counter is deliberately untouched — its unbroken streaming is the point.
+        stopBtn.classList.remove("straining");
+        void stopBtn.offsetWidth;            // restart the animation
+        stopBtn.classList.add("straining");
+      } else if(stopClicks === 3){
+        window.open(ACTION_URL, "_blank");
+        stopBtn.classList.add("linked");     // quiet persistent link from here on
+        stopBtn.title = "Opens ways to help, in a new tab";
+      }
+    });
 
     // methodology tooltip: tap to pin on touch, Escape / outside-click to close
     var info = document.getElementById("methodInfo");
