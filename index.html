@@ -208,6 +208,18 @@
     box-shadow:0 0 6px rgba(126,42,38,.7);
   }
   .tgl:focus-visible{outline:none;border-color:var(--ink-soft)}
+  /* segmented Flowing / Ticking control */
+  .seg{display:inline-flex;border:1px solid var(--line);border-radius:999px;overflow:hidden}
+  .seg-opt{
+    -webkit-appearance:none;appearance:none;cursor:pointer;
+    font-family:var(--serif);font-size:.82rem;letter-spacing:.02em;
+    color:var(--muted);background:transparent;border:none;
+    padding:.2rem .8rem .26rem;transition:color .2s,background .2s;
+  }
+  .seg-opt + .seg-opt{border-left:1px solid var(--line)}
+  .seg-opt[aria-checked="true"]{color:var(--ink);background:rgba(126,42,38,.22)}
+  .seg-opt:hover{color:var(--ink-soft)}
+  .seg-opt:focus-visible{outline:none;color:var(--ink)}
   .counter{
     font-size:clamp(2.3rem,11.5vw,6.4rem);
     line-height:1;
@@ -349,7 +361,7 @@
 <main>
   <div class="topbar">
     <p class="kicker">A live memorial</p>
-    <span class="version" id="version">v1.3</span>
+    <span class="version" id="version">v1.4</span>
   </div>
   <h1>Killed for food</h1>
 
@@ -373,7 +385,11 @@
     <p class="sub"><b id="sinceOpen">0</b> have been killed since you opened this page.</p>
     <p class="subline" id="subline"></p>
     <div class="experiments" id="experiments">
-      <span class="exp-label">display</span>
+      <span class="exp-label">counter</span>
+      <div class="seg" role="radiogroup" aria-label="Counter mode">
+        <button class="seg-opt" id="modeFlowing" type="button" role="radio" aria-checked="true">Flowing</button>
+        <button class="seg-opt" id="modeTicking" type="button" role="radio" aria-checked="false">Ticking</button>
+      </div>
       <button class="tgl" id="tglOpened" type="button" role="switch" aria-checked="false"><span class="dot" aria-hidden="true"></span>show opened-at time</button>
     </div>
   </div>
@@ -406,23 +422,22 @@
   function commas(n){ return fmt.format(Math.max(0, Math.floor(n))); }
 
   /* ---------- experimental display options ---------- */
-  var opts = { subOpened:false };
+  var opts = { ticking:false, subOpened:false };
   try {
     var saved = JSON.parse(localStorage.getItem("astc.opts") || "{}");
     if(saved && typeof saved === "object"){
+      opts.ticking = !!saved.ticking;
       opts.subOpened = !!saved.subOpened;
     }
   } catch(e){}
   function saveOpts(){ try{ localStorage.setItem("astc.opts", JSON.stringify(opts)); }catch(e){} }
 
-  // Elapsed time as a running stopwatch: [H:]MM:SS.cc
-  function formatStopwatch(ms){
-    var cs = Math.floor((ms > 0 ? ms : 0) / 10);
-    var s = Math.floor(cs/100); cs = cs % 100;
-    var m = Math.floor(s/60);   s = s % 60;
-    var h = Math.floor(m/60);   m = m % 60;
+  // Elapsed time on the page as h:mm:ss (runs in both counter modes).
+  function formatHMS(ms){
+    var t = Math.floor((ms > 0 ? ms : 0) / 1000);
+    var s = t % 60, m = Math.floor(t/60) % 60, h = Math.floor(t/3600);
     function p(n){ return n<10 ? "0"+n : ""+n; }
-    return (h>0 ? (h+":"+p(m)+":"+p(s)) : (m+":"+p(s))) + "." + p(cs);
+    return h + ":" + p(m) + ":" + p(s);
   }
 
   /* ---------- counters ----------
@@ -647,23 +662,24 @@
 
   /* ---------- subline (the running stopwatch / opened-at reference) ---------- */
   function setSublineMode(){
-    if(opts.subOpened){
-      swPre.textContent = "page opened at ";
-      swText.textContent = openedAtStr;
-      swPost.textContent = "";
-    } else {
-      swPre.textContent = "";
-      swPost.textContent = " on this page";
-      // swText is refreshed every frame by tick()
-    }
+    // The h:mm:ss stopwatch (swText) is always shown and refreshed each frame;
+    // the opened-at clock time is appended only when the toggle is on.
+    swPre.textContent = "";
+    swPost.textContent = opts.subOpened
+      ? (" on this page · opened at " + openedAtStr)
+      : " on this page";
   }
 
   /* ---------- animation: just rewrite textContent every frame ---------- */
   var SUB = [ [1e12,"Trillion"], [1e9,"Billion"], [1e6,"Million"] ];
   function tick(force){
     var now = Date.now();
-    var elapsedYear = (now - yearStartMs)/1000;
-    var sinceYear = perSecond * elapsedYear;
+    // Same elapsed-time math for both modes; the only difference is cadence.
+    // Flowing: continuous elapsed seconds -> the number changes every frame.
+    // Ticking: elapsed seconds floored -> it holds, then jumps each second.
+    var rawYear = (now - yearStartMs)/1000;
+    var yearSec = opts.ticking ? Math.floor(rawYear) : rawYear;
+    var sinceYear = perSecond * yearSec;
     bigEl.textContent = commas(sinceYear);
 
     // dramatic word subtitle, once the figure passes a million
@@ -675,11 +691,16 @@
       subNumEl.textContent = commas(lead);
     } else if(!bigSubEl.hidden){ bigSubEl.hidden=true; }
 
-    sinceOpenEl.textContent = commas(perSecond * ((now - openedMs)/1000));
-    if(!opts.subOpened){ swText.textContent = formatStopwatch(now - openedMs); }
+    var rawOpen = (now - openedMs)/1000;
+    var openSec = opts.ticking ? Math.floor(rawOpen) : rawOpen;
+    sinceOpenEl.textContent = commas(perSecond * openSec);
+
+    // page stopwatch (h:mm:ss) — always running, both modes
+    swText.textContent = formatHMS(now - openedMs);
+
     for(var i=0;i<speciesCounters.length;i++){
       var sc = speciesCounters[i];
-      sc.el.textContent = commas(sc.perSecond * elapsedYear);
+      sc.el.textContent = commas(sc.perSecond * yearSec);
     }
   }
 
@@ -714,6 +735,17 @@
     catch(e){ openedAtStr = new Date(openedMs).toString(); }
     setSublineMode();
 
+    // counter mode: Flowing (every frame) | Ticking (once per second)
+    var mFlow = document.getElementById("modeFlowing"),
+        mTick = document.getElementById("modeTicking");
+    function reflectMode(){
+      mFlow.setAttribute("aria-checked", opts.ticking ? "false" : "true");
+      mTick.setAttribute("aria-checked", opts.ticking ? "true" : "false");
+    }
+    reflectMode();
+    mFlow.addEventListener("click", function(){ if(opts.ticking){ opts.ticking=false; reflectMode(); saveOpts(); tick(true); } });
+    mTick.addEventListener("click", function(){ if(!opts.ticking){ opts.ticking=true; reflectMode(); saveOpts(); tick(true); } });
+
     // experimental display toggle
     var tO = document.getElementById("tglOpened");
     function reflect(btn,on){ btn.setAttribute("aria-checked", on ? "true" : "false"); }
@@ -744,12 +776,9 @@
     document.getElementById("genLine").textContent = "Data compiled " + m.generated + ".";
 
     applyScope("__world__");
-    if(reduceMotion){
-      tick(true);
-      setInterval(function(){ tick(false); }, 1000);
-    } else {
-      requestAnimationFrame(loop);
-    }
+    // Always drive from requestAnimationFrame. Flowing updates every frame;
+    // Ticking is achieved by flooring the elapsed time, not by a slower timer.
+    requestAnimationFrame(loop);
   }
 
   function fail(msg){
