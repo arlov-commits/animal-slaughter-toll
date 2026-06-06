@@ -214,11 +214,33 @@
     font-weight:500;
     letter-spacing:.005em;
     color:var(--ink);
-    display:inline-flex;
     white-space:nowrap;
   }
-  .counter .cell{display:inline-block;text-align:center}
-  .counter .sep{color:var(--ink-soft)}
+  /* shared odometer component (used by every live count-up) */
+  .odo{
+    display:inline-flex;align-items:flex-end;white-space:nowrap;
+    font-variant-numeric:lining-nums tabular-nums;
+  }
+  .odo .cell{display:inline-block;text-align:center}
+  .odo .sep{color:var(--ink-soft)}
+  /* rolling ("speedometer") mode: one masked, scrolling column per digit */
+  .odo.roll .col{display:inline-block;height:1em;line-height:1;overflow:hidden}
+  .odo.roll .col .strip{display:block;will-change:transform}
+  .odo.roll .col .strip span{display:block;height:1em;line-height:1;text-align:center}
+  .odo.roll .sep{display:inline-block;height:1em;line-height:1;text-align:center}
+
+  /* dramatic word subtitle under the headline count */
+  .bigsub{
+    display:flex;align-items:flex-end;gap:.5ch;flex-wrap:wrap;
+    margin:.85rem 0 0;line-height:1;
+    font-size:clamp(1.2rem,4vw,2rem);letter-spacing:.02em;
+  }
+  .bigsub[hidden]{display:none}
+  .bigsub .n{color:var(--ink)}
+  .bigsub .word{
+    text-transform:uppercase;letter-spacing:.22em;
+    font-size:.6em;color:var(--muted);padding-bottom:.12em;
+  }
   .hero .rule{
     width:3.2rem;height:1px;background:var(--ox);
     margin:1.4rem 0 1.2rem;opacity:.8;
@@ -338,7 +360,7 @@
 <main>
   <div class="topbar">
     <p class="kicker">A live memorial</p>
-    <span class="version" id="version">v1.1</span>
+    <span class="version" id="version">v1.2</span>
   </div>
   <h1>Killed for food</h1>
 
@@ -356,14 +378,14 @@
         <span class="tip" role="tooltip" id="methodTip"></span>
       </button>
     </p>
-    <div class="counter" id="bigCounter" aria-live="off">—</div>
+    <div class="counter odo" id="bigCounter" aria-live="off">—</div>
+    <p class="bigsub" id="bigSub" hidden><span class="n odo" id="bigSubNum"></span><span class="word" id="bigSubWord"></span></p>
     <div class="rule"></div>
     <p class="sub"><b id="sinceOpen">0</b> have been killed since you opened this page.</p>
     <p class="subline" id="subline"></p>
     <div class="experiments" id="experiments">
       <span class="exp-label">display</span>
-      <button class="tgl" id="tglCompact" type="button" role="switch" aria-checked="false"><span class="dot" aria-hidden="true"></span>compact numbers</button>
-      <button class="tgl" id="tglStopwatch" type="button" role="switch" aria-checked="false"><span class="dot" aria-hidden="true"></span>stopwatch</button>
+      <button class="tgl" id="tglRoll" type="button" role="switch" aria-checked="false"><span class="dot" aria-hidden="true"></span>rolling counters</button>
       <button class="tgl" id="tglOpened" type="button" role="switch" aria-checked="false"><span class="dot" aria-hidden="true"></span>show opened-at time</button>
     </div>
   </div>
@@ -396,29 +418,16 @@
   function commas(n){ return fmt.format(Math.max(0, Math.floor(n))); }
 
   /* ---------- experimental display options ---------- */
-  var opts = { compact:false, stopwatch:false, subOpened:false };
+  var opts = { roll:false, subOpened:false };
   try {
     var saved = JSON.parse(localStorage.getItem("astc.opts") || "{}");
     if(saved && typeof saved === "object"){
-      opts.compact = !!saved.compact;
-      opts.stopwatch = !!saved.stopwatch;
+      opts.roll = !!saved.roll;
       opts.subOpened = !!saved.subOpened;
     }
   } catch(e){}
   function saveOpts(){ try{ localStorage.setItem("astc.opts", JSON.stringify(opts)); }catch(e){} }
 
-  var FMT = {
-    dec3:  new Intl.NumberFormat("en-US",{minimumFractionDigits:3,maximumFractionDigits:3}),
-    comp2: new Intl.NumberFormat("en-US",{notation:"compact",minimumFractionDigits:2,maximumFractionDigits:2}),
-    comp4: new Intl.NumberFormat("en-US",{notation:"compact",minimumFractionDigits:4,maximumFractionDigits:4})
-  };
-  // Format one of the two live count-ups according to the active toggles.
-  function formatCount(value){
-    value = value > 0 ? value : 0;
-    if(opts.compact){ return (opts.stopwatch ? FMT.comp4 : FMT.comp2).format(value); }
-    if(opts.stopwatch){ return FMT.dec3.format(value); }
-    return fmt.format(Math.floor(value));
-  }
   // Elapsed time as a running stopwatch: [H:]MM:SS.cc
   function formatStopwatch(ms){
     var cs = Math.floor((ms > 0 ? ms : 0) / 10);
@@ -429,56 +438,107 @@
     return (h>0 ? (h+":"+p(m)+":"+p(s)) : (m+":"+p(s))) + "." + p(cs);
   }
 
-  /* ---------- jitter-free counter: one fixed-width cell per character,
-       widths measured from the element's own font (handles digits,
-       separators, decimals and compact suffixes like K/M/B) ---------- */
-  function Odometer(el){ this.el = el; this.cells = []; this.text = ""; this.w = {}; this.probe = null; }
-  Odometer.prototype.charWidth = function(ch){
-    if(this.w[ch] != null) return this.w[ch];
-    if(!this.probe){
-      var cs = getComputedStyle(this.el);
-      var pr = document.createElement("span");
-      pr.style.cssText = "position:absolute;left:-9999px;top:0;visibility:hidden;white-space:pre;letter-spacing:normal";
-      pr.style.fontFamily = cs.fontFamily;
-      pr.style.fontSize = cs.fontSize;
-      pr.style.fontWeight = cs.fontWeight;
-      pr.style.fontStyle = cs.fontStyle;
-      pr.style.fontVariantNumeric = cs.fontVariantNumeric;
-      document.body.appendChild(pr);
-      this.probe = pr;
+  // One shared hidden probe measures any character in any counter's font.
+  var measureProbe = null;
+  function measureChar(el, ch){
+    if(!measureProbe){
+      measureProbe = document.createElement("span");
+      measureProbe.style.cssText = "position:absolute;left:-9999px;top:0;visibility:hidden;white-space:pre;letter-spacing:normal";
+      document.body.appendChild(measureProbe);
     }
-    this.probe.textContent = new Array(9).join(ch); // 8 copies
-    var width = this.probe.getBoundingClientRect().width / 8;
-    this.w[ch] = width;
-    return width;
+    var cs = getComputedStyle(el);
+    measureProbe.style.fontFamily = cs.fontFamily;
+    measureProbe.style.fontSize = cs.fontSize;
+    measureProbe.style.fontWeight = cs.fontWeight;
+    measureProbe.style.fontStyle = cs.fontStyle;
+    measureProbe.style.fontVariantNumeric = cs.fontVariantNumeric;
+    measureProbe.textContent = new Array(9).join(ch); // 8 copies
+    return measureProbe.getBoundingClientRect().width / 8;
+  }
+
+  // Mechanical-odometer wheel position for the digit at 10^place: the units
+  // wheel spins continuously; every higher wheel rests on its integer digit
+  // and only rolls during the final tenth of the wheel below it (the carry),
+  // so the number stays aligned and legible while the low digits blur.
+  function smoothstep(t){ return t*t*(3-2*t); }
+  function wheelPos(value, place){
+    if(place === 0) return value % 10;
+    var p10 = Math.pow(10, place);
+    var digit = Math.floor(value / p10) % 10;
+    var lower = (value % p10) / p10;            // 0..1 through this wheel's block
+    var carry = lower > 0.9 ? smoothstep((lower - 0.9) / 0.1) : 0;
+    return digit + carry;
+  }
+
+  /* ---------- counter component ----------
+     Two render modes, switchable live:
+       plain — one fixed-width measured cell per character (jitter-free).
+       roll  — one masked column per digit, scrolled by elapsed time so the
+               digits run continuously like a speedometer.
+     Used by every live count-up on the page. */
+  function Counter(el){
+    el.classList.add("odo");
+    this.el = el; this.mode = null; this.text = "";
+    this.len = -1; this.parts = []; this.cells = []; this.w = {};
+  }
+  Counter.prototype.charWidth = function(ch){
+    if(this.w[ch] != null) return this.w[ch];
+    return (this.w[ch] = measureChar(this.el, ch));
   };
-  Odometer.prototype.cellClass = function(ch){ return "cell" + (/[0-9]/.test(ch) ? "" : " sep"); };
-  Odometer.prototype.set = function(str){
+  Counter.prototype.render = function(value){
+    value = value > 0 ? value : 0;
+    if(opts.roll){
+      if(this.mode !== "roll"){ this.el.textContent=""; this.el.classList.add("roll"); this.mode="roll"; this.len=-1; this.cells=[]; this.text=""; this.w={}; }
+      this.roll(value);
+    } else {
+      if(this.mode !== "plain"){ this.el.textContent=""; this.el.classList.remove("roll"); this.mode="plain"; this.parts=[]; this.len=-1; this.text=""; this.w={}; }
+      this.plain(fmt.format(Math.floor(value)));
+    }
+  };
+  Counter.prototype.plain = function(str){
     if(str === this.text) return;
     if(str.length !== this.text.length){
-      this.el.textContent = "";
-      this.cells = [];
+      this.el.textContent=""; this.cells=[];
       for(var i=0;i<str.length;i++){
-        var ch = str[i];
-        var span = document.createElement("span");
-        span.className = this.cellClass(ch);
-        span.style.width = this.charWidth(ch) + "px";
-        span.textContent = ch;
-        this.el.appendChild(span);
-        this.cells.push(span);
+        var ch=str[i], span=document.createElement("span");
+        span.className="cell"+(/[0-9]/.test(ch)?"":" sep");
+        span.style.width=this.charWidth(ch)+"px";
+        span.textContent=ch; this.el.appendChild(span); this.cells.push(span);
       }
-      this.text = str;
-      return;
+      this.text=str; return;
     }
     for(var j=0;j<str.length;j++){
-      if(str[j] !== this.text[j]){
-        var c = this.cells[j];
-        c.textContent = str[j];
-        c.style.width = this.charWidth(str[j]) + "px";
-        c.className = this.cellClass(str[j]);
+      if(str[j]!==this.text[j]){
+        var c=this.cells[j]; c.textContent=str[j];
+        c.style.width=this.charWidth(str[j])+"px";
+        c.className="cell"+(/[0-9]/.test(str[j])?"":" sep");
       }
     }
-    this.text = str;
+    this.text=str;
+  };
+  Counter.prototype.build = function(intDigits){
+    this.el.textContent=""; this.parts=[];
+    var dw=this.charWidth("0"), cw=this.charWidth(",");
+    for(var place=intDigits-1; place>=0; place--){
+      var col=document.createElement("span"); col.className="col"; col.style.width=dw+"px";
+      var strip=document.createElement("span"); strip.className="strip";
+      for(var d=0; d<=10; d++){ var cell=document.createElement("span"); cell.textContent=String(d%10); strip.appendChild(cell); }
+      col.appendChild(strip); this.el.appendChild(col);
+      this.parts.push({strip:strip, place:place});
+      if(place>0 && place%3===0){
+        var sep=document.createElement("span"); sep.className="sep"; sep.style.width=cw+"px"; sep.textContent=",";
+        this.el.appendChild(sep); this.parts.push(null);
+      }
+    }
+    this.len=intDigits;
+  };
+  Counter.prototype.roll = function(value){
+    var intDigits = Math.max(1, String(Math.floor(value)).length);
+    if(this.len !== intDigits) this.build(intDigits);
+    for(var k=0;k<this.parts.length;k++){
+      var part=this.parts[k]; if(!part) continue;
+      part.strip.style.transform="translateY("+(-wheelPos(value, part.place))+"em)";
+    }
   };
 
   /* ---------- state ---------- */
@@ -487,13 +547,16 @@
   var yearStartMs = Date.UTC(new Date().getUTCFullYear(), 0, 1);
   var openedMs = Date.now();
 
-  var big = new Odometer(document.getElementById("bigCounter"));
-  var sinceOpenEl = document.getElementById("sinceOpen");
+  var big = new Counter(document.getElementById("bigCounter"));
+  var sinceOpenC = new Counter(document.getElementById("sinceOpen"));
+  var subtitleC = new Counter(document.getElementById("bigSubNum"));
+  var bigSubEl = document.getElementById("bigSub");
+  var bigSubWordEl = document.getElementById("bigSubWord");
   var sublineEl = document.getElementById("subline");
   var leadTextEl = document.getElementById("leadText");
   var methodTipEl = document.getElementById("methodTip");
   var swPre, swText, swPost, openedAtStr = "";
-  var speciesCounters = []; // {el, perSecond}
+  var speciesCounters = []; // {counter, perSecond}
 
   function paceRows(annual){
     var perMonth  = annual/12;
@@ -567,7 +630,8 @@
 
       var count = document.createElement("div");
       count.className = "count";
-      count.textContent = commas(s.count);
+      var countOdo = document.createElement("span");
+      count.appendChild(countOdo);
 
       var meta = document.createElement("div");
       meta.className = "meta";
@@ -585,7 +649,7 @@
       li.appendChild(row);
 
       // live per-second tick for this species (since year start)
-      speciesCounters.push({ el: count, perSecond: s.count/SECONDS_PER_YEAR, base: s.count });
+      speciesCounters.push({ counter: new Counter(countOdo), perSecond: s.count/SECONDS_PER_YEAR });
 
       if(isWorld){
         var drill = document.createElement("div");
@@ -707,15 +771,27 @@
   }
 
   /* ---------- animation ---------- */
+  var SUB = [ [1e12,"Trillion"], [1e9,"Billion"], [1e6,"Million"] ];
   function tick(force){
     var now = Date.now();
-    var sinceYear = perSecond * ((now - yearStartMs)/1000);
-    big.set(formatCount(sinceYear));
-    sinceOpenEl.textContent = formatCount(perSecond * ((now - openedMs)/1000));
+    var elapsedYear = (now - yearStartMs)/1000;
+    var sinceYear = perSecond * elapsedYear;
+    big.render(sinceYear);
+
+    // dramatic word subtitle, once the figure passes a million
+    var word=null, lead=0;
+    for(var q=0;q<SUB.length;q++){ if(sinceYear>=SUB[q][0]){ word=SUB[q][1]; lead=sinceYear/SUB[q][0]; break; } }
+    if(word){
+      if(bigSubEl.hidden) bigSubEl.hidden=false;
+      if(bigSubWordEl.textContent!==word) bigSubWordEl.textContent=word;
+      subtitleC.render(Math.floor(lead));
+    } else if(!bigSubEl.hidden){ bigSubEl.hidden=true; }
+
+    sinceOpenC.render(perSecond * ((now - openedMs)/1000));
     if(!opts.subOpened){ swText.textContent = formatStopwatch(now - openedMs); }
     for(var i=0;i<speciesCounters.length;i++){
       var sc = speciesCounters[i];
-      sc.el.textContent = commas(sc.perSecond * ((now - yearStartMs)/1000));
+      sc.counter.render(sc.perSecond * elapsedYear);
     }
   }
 
@@ -751,13 +827,11 @@
     setSublineMode();
 
     // experimental display toggles
-    var tC = document.getElementById("tglCompact"),
-        tS = document.getElementById("tglStopwatch"),
+    var tR = document.getElementById("tglRoll"),
         tO = document.getElementById("tglOpened");
     function reflect(btn,on){ btn.setAttribute("aria-checked", on ? "true" : "false"); }
-    reflect(tC,opts.compact); reflect(tS,opts.stopwatch); reflect(tO,opts.subOpened);
-    tC.addEventListener("click", function(){ opts.compact=!opts.compact; reflect(tC,opts.compact); saveOpts(); tick(true); });
-    tS.addEventListener("click", function(){ opts.stopwatch=!opts.stopwatch; reflect(tS,opts.stopwatch); saveOpts(); tick(true); });
+    reflect(tR,opts.roll); reflect(tO,opts.subOpened);
+    tR.addEventListener("click", function(){ opts.roll=!opts.roll; reflect(tR,opts.roll); saveOpts(); tick(true); });
     tO.addEventListener("click", function(){ opts.subOpened=!opts.subOpened; reflect(tO,opts.subOpened); saveOpts(); setSublineMode(); tick(true); });
 
     // methodology tooltip: tap to pin on touch, Escape / outside-click to close
