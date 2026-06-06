@@ -1,0 +1,607 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Killed for food — a live count</title>
+<meta name="description" content="A live, somber count of the land animals killed for food worldwide, counting up in real time. Based on FAOSTAT slaughter data.">
+<meta name="color-scheme" content="dark">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,500;1,400&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0a0a0b;
+    --bg2:#0e0d0f;
+    --ink:#e9e4da;          /* bone / parchment */
+    --ink-soft:#b7b1a6;
+    --muted:#7d776c;
+    --faint:#4a463f;
+    --line:rgba(233,228,218,.09);
+    --line-strong:rgba(233,228,218,.16);
+    --ox:#7e2a26;           /* dried oxblood, used sparingly */
+    --ox-soft:#5a211f;
+    --serif:"EB Garamond", Georgia, "Times New Roman", serif;
+  }
+  *{box-sizing:border-box}
+  html{-webkit-text-size-adjust:100%}
+  body{
+    margin:0;
+    background:
+      radial-gradient(120% 80% at 50% -10%, #131216 0%, var(--bg2) 40%, var(--bg) 100%) fixed;
+    color:var(--ink);
+    font-family:var(--serif);
+    font-weight:400;
+    line-height:1.5;
+    letter-spacing:.005em;
+    -webkit-font-smoothing:antialiased;
+    text-rendering:optimizeLegibility;
+  }
+  main{
+    max-width:60rem;
+    margin:0 auto;
+    padding:clamp(2.5rem,7vw,6rem) clamp(1.25rem,5vw,3rem) 5rem;
+    opacity:0;
+    animation:rise 1.6s ease .15s forwards;
+  }
+  @keyframes rise{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+
+  .kicker{
+    font-size:.74rem;
+    letter-spacing:.42em;
+    text-transform:uppercase;
+    color:var(--muted);
+    margin:0 0 1.6rem;
+    font-weight:500;
+  }
+  h1{
+    font-size:clamp(1.9rem,5.2vw,3.1rem);
+    font-weight:500;
+    line-height:1.08;
+    margin:0 0 .9rem;
+    letter-spacing:.01em;
+  }
+  .epigraph{
+    color:var(--ink-soft);
+    font-style:italic;
+    font-size:clamp(1.02rem,2.2vw,1.22rem);
+    max-width:34rem;
+    margin:0 0 2.4rem;
+  }
+
+  /* ---- scope ---- */
+  .scope{
+    display:flex;align-items:baseline;gap:.6rem;flex-wrap:wrap;
+    margin:0 0 3.2rem;
+    padding-top:1.6rem;
+    border-top:1px solid var(--line);
+    color:var(--muted);
+    font-size:.95rem;
+  }
+  .scope label{letter-spacing:.04em}
+  .scope select{
+    appearance:none;-webkit-appearance:none;
+    background:transparent;
+    color:var(--ink);
+    border:none;
+    border-bottom:1px solid var(--line-strong);
+    font-family:var(--serif);
+    font-size:1.05rem;
+    padding:.15rem 1.5rem .25rem .1rem;
+    margin:0;
+    cursor:pointer;
+    background-image:linear-gradient(45deg,transparent 50%,var(--muted) 50%),linear-gradient(135deg,var(--muted) 50%,transparent 50%);
+    background-position:right .35rem center,right .05rem center;
+    background-size:5px 5px,5px 5px;
+    background-repeat:no-repeat;
+    max-width:18rem;
+  }
+  .scope select:focus-visible{outline:none;border-bottom-color:var(--ink)}
+  .scope option{background:#16151a;color:var(--ink)}
+  .scope .reset{
+    background:none;border:none;color:var(--muted);
+    font-family:var(--serif);font-size:.92rem;cursor:pointer;
+    text-decoration:underline;text-underline-offset:3px;
+    text-decoration-color:var(--faint);padding:0;
+    visibility:hidden;
+  }
+  .scope .reset:hover{color:var(--ink-soft)}
+
+  /* ---- hero counter ---- */
+  .hero{margin:0 0 3.4rem}
+  .hero .lead{
+    font-size:.78rem;letter-spacing:.34em;text-transform:uppercase;
+    color:var(--muted);margin:0 0 1rem;font-weight:500;
+  }
+  .counter{
+    font-size:clamp(2.3rem,11.5vw,6.4rem);
+    line-height:1;
+    font-weight:500;
+    letter-spacing:.005em;
+    color:var(--ink);
+    display:inline-flex;
+    white-space:nowrap;
+  }
+  .counter .cell{display:inline-block;text-align:center}
+  .counter .sep{color:var(--ink-soft)}
+  .hero .rule{
+    width:3.2rem;height:1px;background:var(--ox);
+    margin:1.4rem 0 1.2rem;opacity:.8;
+  }
+  .hero .sub{
+    color:var(--ink-soft);font-size:clamp(1rem,2.2vw,1.16rem);
+    margin:0;max-width:40rem;
+  }
+  .hero .sub b{font-weight:500;color:var(--ink);font-variant-numeric:tabular-nums}
+
+  /* ---- section frame ---- */
+  section{margin:0 0 3.4rem}
+  .sec-head{
+    font-size:.74rem;letter-spacing:.34em;text-transform:uppercase;
+    color:var(--muted);margin:0 0 1.4rem;font-weight:500;
+    padding-bottom:.9rem;border-bottom:1px solid var(--line);
+  }
+
+  /* ---- pace list ---- */
+  .pace{list-style:none;margin:0;padding:0}
+  .pace li{
+    display:flex;align-items:baseline;justify-content:space-between;
+    gap:1rem;padding:.62rem 0;border-bottom:1px solid var(--line);
+  }
+  .pace li:last-child{border-bottom:none}
+  .pace .when{
+    color:var(--ink-soft);font-size:1.06rem;letter-spacing:.02em;
+  }
+  .pace .when small{display:block;color:var(--muted);font-size:.8rem;letter-spacing:.02em;font-style:italic}
+  .pace .howmany{
+    font-size:clamp(1.1rem,3.2vw,1.5rem);
+    color:var(--ink);font-variant-numeric:tabular-nums;
+    text-align:right;white-space:nowrap;
+  }
+  .pace li:first-child .howmany{color:var(--ink)}
+  .pace li:first-child .when{color:var(--ink)}
+
+  /* ---- species ---- */
+  .species{list-style:none;margin:0;padding:0}
+  .sp{border-bottom:1px solid var(--line)}
+  .sp-row{
+    display:grid;
+    grid-template-columns:1fr auto;
+    align-items:baseline;
+    gap:.4rem 1rem;
+    padding:.72rem 0 .5rem;
+    cursor:pointer;
+  }
+  .sp-row.nodrill{cursor:default}
+  .sp .name{
+    font-size:1.12rem;color:var(--ink);letter-spacing:.01em;
+    display:flex;align-items:baseline;gap:.55rem;
+  }
+  .sp .tw{
+    color:var(--faint);font-size:.85rem;width:.8em;display:inline-block;
+    transition:transform .25s ease,color .2s;
+  }
+  .sp.open .tw{transform:rotate(90deg);color:var(--muted)}
+  .sp-row.nodrill .tw{visibility:hidden}
+  .sp .count{
+    font-size:1.12rem;color:var(--ink);font-variant-numeric:tabular-nums;
+    text-align:right;white-space:nowrap;
+  }
+  .sp .meta{
+    grid-column:1 / -1;
+    display:flex;align-items:center;gap:.8rem;
+    color:var(--muted);font-size:.82rem;
+  }
+  .sp .share{font-variant-numeric:tabular-nums;font-style:italic;min-width:3.4em}
+  .bar{
+    position:relative;height:2px;flex:1;background:var(--line);overflow:hidden;
+  }
+  .bar i{
+    position:absolute;left:0;top:0;bottom:0;display:block;
+    background:linear-gradient(90deg,var(--ox-soft),var(--ox));
+    min-width:1px;
+  }
+  .drill{
+    overflow:hidden;height:0;
+    transition:height .32s ease;
+  }
+  .drill-inner{padding:.2rem 0 1rem}
+  .drill table{width:100%;border-collapse:collapse}
+  .drill td{
+    padding:.34rem 0;border-bottom:1px solid var(--line);
+    color:var(--ink-soft);font-size:.98rem;
+  }
+  .drill tr:last-child td{border-bottom:none}
+  .drill td.n{text-align:right;font-variant-numeric:tabular-nums;color:var(--ink);white-space:nowrap}
+  .drill td.r{color:var(--muted);font-variant-numeric:tabular-nums;width:1px;white-space:nowrap;padding-right:1rem}
+  .drill .more{color:var(--muted);font-style:italic;font-size:.9rem;padding-top:.4rem}
+
+  /* ---- footer ---- */
+  footer{
+    margin-top:4.5rem;padding-top:1.6rem;border-top:1px solid var(--line);
+    color:var(--muted);font-size:.92rem;line-height:1.65;
+  }
+  footer p{margin:0 0 .85rem;max-width:46rem}
+  footer a{color:var(--ink-soft);text-decoration:underline;text-underline-offset:2px;text-decoration-color:var(--faint)}
+  footer a:hover{color:var(--ink)}
+  footer .fineprint{color:var(--faint);font-size:.84rem;margin-top:1.4rem}
+
+  .loaderr{color:var(--ox);font-style:italic}
+
+  @media (max-width:30rem){
+    .pace .howmany{font-size:1.15rem}
+  }
+  @media (prefers-reduced-motion:reduce){
+    main{animation:none;opacity:1}
+    .drill{transition:none}
+    .sp .tw{transition:none}
+  }
+</style>
+</head>
+<body>
+<main>
+  <p class="kicker">A live memorial</p>
+  <h1>Killed for food</h1>
+  <p class="epigraph">Land animals, slaughtered worldwide. Numbers this large stop meaning anything. Each one was an animal that was alive, and then was not.</p>
+
+  <div class="scope">
+    <label for="scopeSelect">Counting</label>
+    <select id="scopeSelect" aria-label="Choose region"></select>
+    <button class="reset" id="scopeReset" type="button">return to the world</button>
+  </div>
+
+  <div class="hero" id="hero">
+    <p class="lead" id="heroLead">Killed so far this year</p>
+    <div class="counter" id="bigCounter" aria-live="off">—</div>
+    <div class="rule"></div>
+    <p class="sub"><b id="sinceOpen">0</b> have been killed since you opened this page.</p>
+  </div>
+
+  <section aria-labelledby="paceHead">
+    <h2 class="sec-head" id="paceHead">The pace of it</h2>
+    <ul class="pace" id="paceList"></ul>
+  </section>
+
+  <section aria-labelledby="spHead">
+    <h2 class="sec-head" id="spHead">By species <span id="spScopeNote" style="text-transform:none;letter-spacing:0;font-style:italic;color:var(--faint)"></span></h2>
+    <ul class="species" id="speciesList"></ul>
+  </section>
+
+  <footer>
+    <p id="srcLine"></p>
+    <p>These are <em>land</em> animals killed for food, counted as individuals. They do not include fish and other aquatic animals — by number the largest group of all, killed in the hundreds of billions to trillions — nor animals who die before slaughter, the day-old male chicks culled at hatcheries, or animals killed outside recorded food production. The true toll is higher than what is shown here.</p>
+    <p>The pace assumes the year's killing is spread evenly across it; the live figures are a steady rate, not a live feed. The FAO "China" aggregate is excluded so its regions are not counted twice. <span id="breathNote"></span></p>
+    <p class="fineprint" id="genLine"></p>
+  </footer>
+</main>
+
+<script>
+(function(){
+  "use strict";
+  var SECONDS_PER_YEAR = 365.2425 * 86400; // 31,556,952
+  var reduceMotion = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  var fmt = new Intl.NumberFormat("en-US");
+  function commas(n){ return fmt.format(Math.max(0, Math.floor(n))); }
+
+  /* ---------- jitter-free counter (fixed-width measured cells) ---------- */
+  function Odometer(el){
+    this.el = el; this.cells = []; this.text = "";
+    this.dw = 0; this.cw = 0; this.measured = false;
+  }
+  Odometer.prototype.measure = function(){
+    var probe = document.createElement("span");
+    probe.className = "counter";
+    probe.style.position = "absolute";
+    probe.style.visibility = "hidden";
+    probe.style.whiteSpace = "nowrap";
+    probe.textContent = "0000000000";
+    this.el.parentNode.appendChild(probe);
+    this.dw = probe.getBoundingClientRect().width / 10;
+    probe.textContent = ",,,,,,,,,,";
+    this.cw = probe.getBoundingClientRect().width / 10;
+    probe.parentNode.removeChild(probe);
+    this.measured = true;
+  };
+  Odometer.prototype.set = function(value){
+    if(!this.measured) this.measure();
+    var s = commas(value);
+    if(s.length !== this.text.length){
+      // rebuild cells
+      this.el.textContent = "";
+      this.cells = [];
+      for(var i=0;i<s.length;i++){
+        var ch = s[i];
+        var span = document.createElement("span");
+        var sep = (ch === ",");
+        span.className = "cell" + (sep ? " sep" : "");
+        span.style.width = (sep ? this.cw : this.dw) + "px";
+        span.textContent = ch;
+        this.el.appendChild(span);
+        this.cells.push(span);
+      }
+      this.text = s;
+      return;
+    }
+    for(var j=0;j<s.length;j++){
+      if(s[j] !== this.text[j]){ this.cells[j].textContent = s[j]; }
+    }
+    this.text = s;
+  };
+
+  /* ---------- state ---------- */
+  var DATA = null;
+  var perYear = 0, perSecond = 0;     // active scope rate
+  var yearStartMs = Date.UTC(new Date().getUTCFullYear(), 0, 1);
+  var openedMs = Date.now();
+
+  var big = new Odometer(document.getElementById("bigCounter"));
+  var sinceOpenEl = document.getElementById("sinceOpen");
+  var speciesCounters = []; // {el, perSecond}
+
+  function paceRows(annual){
+    var perMonth  = annual/12;
+    var perDay    = annual/365.2425;
+    var perHour   = perDay/24;
+    var perMinute = perHour/60;
+    var perSec    = annual/SECONDS_PER_YEAR;
+    var bps       = (DATA && DATA.meta.breaths_per_second) || 15;
+    var perBreath = perSec/bps;
+    return [
+      ["Every year", commas(annual), ""],
+      ["Every month", commas(perMonth), ""],
+      ["Every day", commas(perDay), ""],
+      ["Every hour", commas(perHour), ""],
+      ["Every minute", commas(perMinute), ""],
+      ["Every second", commas(perSec), ""],
+      ["Every breath", commas(perBreath), "at " + bps + " breaths per second"]
+    ];
+  }
+
+  function renderPace(annual){
+    var ul = document.getElementById("paceList");
+    ul.textContent = "";
+    paceRows(annual).forEach(function(r){
+      var li = document.createElement("li");
+      var when = document.createElement("span");
+      when.className = "when";
+      when.appendChild(document.createTextNode(r[0]));
+      if(r[2]){ var sm=document.createElement("small"); sm.textContent=r[2]; when.appendChild(sm); }
+      var hm = document.createElement("span");
+      hm.className = "howmany";
+      hm.textContent = r[1];
+      li.appendChild(when); li.appendChild(hm);
+      ul.appendChild(li);
+    });
+  }
+
+  // Build a "top countries for this species" map lazily.
+  var spCountryCache = {};
+  function topCountriesForSpecies(spId){
+    if(spCountryCache[spId]) return spCountryCache[spId];
+    var list = [];
+    DATA.countries.forEach(function(c){
+      var v = c.by_species[spId];
+      if(v && v > 0) list.push([c.name, v]);
+    });
+    list.sort(function(a,b){ return b[1]-a[1]; });
+    spCountryCache[spId] = list;
+    return list;
+  }
+
+  function renderSpecies(activeSpecies, total, isWorld){
+    var ul = document.getElementById("speciesList");
+    ul.textContent = "";
+    speciesCounters = [];
+    var maxCount = activeSpecies.reduce(function(m,s){ return Math.max(m, s.count); }, 0) || 1;
+
+    activeSpecies.forEach(function(s){
+      var share = total ? s.count/total : 0;
+      var li = document.createElement("li");
+      li.className = "sp";
+
+      var row = document.createElement("div");
+      row.className = "sp-row" + (isWorld ? "" : " nodrill");
+
+      var name = document.createElement("div");
+      name.className = "name";
+      var tw = document.createElement("span"); tw.className="tw"; tw.textContent="›";
+      var nm = document.createElement("span"); nm.textContent = s.name;
+      name.appendChild(tw); name.appendChild(nm);
+
+      var count = document.createElement("div");
+      count.className = "count";
+      count.textContent = commas(s.count);
+
+      var meta = document.createElement("div");
+      meta.className = "meta";
+      var sh = document.createElement("span");
+      sh.className = "share";
+      sh.textContent = (share*100 >= 0.1 ? (share*100).toFixed(1) : (share*100).toFixed(2)) + "%";
+      var bar = document.createElement("div");
+      bar.className = "bar";
+      var fill = document.createElement("i");
+      fill.style.width = Math.max(0.4, (s.count/maxCount)*100) + "%";
+      bar.appendChild(fill);
+      meta.appendChild(sh); meta.appendChild(bar);
+
+      row.appendChild(name); row.appendChild(count); row.appendChild(meta);
+      li.appendChild(row);
+
+      // live per-second tick for this species (since year start)
+      speciesCounters.push({ el: count, perSecond: s.count/SECONDS_PER_YEAR, base: s.count });
+
+      if(isWorld){
+        var drill = document.createElement("div");
+        drill.className = "drill";
+        var inner = document.createElement("div");
+        inner.className = "drill-inner";
+        drill.appendChild(inner);
+        li.appendChild(drill);
+
+        var built = false;
+        row.addEventListener("click", function(){
+          var open = li.classList.toggle("open");
+          if(open && !built){
+            buildDrill(inner, s);
+            built = true;
+          }
+          if(reduceMotion){
+            drill.style.height = open ? "auto" : "0";
+          } else if(open){
+            drill.style.height = inner.offsetHeight + "px";
+          } else {
+            drill.style.height = drill.offsetHeight + "px";
+            requestAnimationFrame(function(){ drill.style.height = "0"; });
+          }
+        });
+        drill.addEventListener("transitionend", function(){
+          if(li.classList.contains("open")) drill.style.height = "auto";
+        });
+      }
+      ul.appendChild(li);
+    });
+  }
+
+  function buildDrill(inner, s){
+    var rows = topCountriesForSpecies(s.id);
+    var table = document.createElement("table");
+    var shown = rows.slice(0, 10);
+    shown.forEach(function(r, i){
+      var tr = document.createElement("tr");
+      var rk = document.createElement("td"); rk.className="r"; rk.textContent=(i+1);
+      var nm = document.createElement("td"); nm.textContent=r[0];
+      var n  = document.createElement("td"); n.className="n"; n.textContent=commas(r[1]);
+      tr.appendChild(rk); tr.appendChild(nm); tr.appendChild(n);
+      table.appendChild(tr);
+    });
+    inner.appendChild(table);
+    if(rows.length > shown.length){
+      var more = document.createElement("div");
+      more.className="more";
+      var rest = rows.length - shown.length;
+      more.textContent = "and " + rest + " more " + (rest===1?"country":"countries") + ".";
+      inner.appendChild(more);
+    }
+  }
+
+  /* ---------- scope ---------- */
+  function applyScope(scopeName){
+    var reset = document.getElementById("scopeReset");
+    var lead = document.getElementById("heroLead");
+    var note = document.getElementById("spScopeNote");
+    var active, total, isWorld;
+
+    if(scopeName === "__world__"){
+      active = DATA.species;
+      total = DATA.world_total;
+      isWorld = true;
+      reset.style.visibility = "hidden";
+      lead.textContent = "Killed so far this year";
+      note.textContent = "";
+    } else {
+      var c = DATA.countries.find(function(x){ return x.name === scopeName; });
+      var arr = [];
+      DATA.species.forEach(function(s){
+        var v = c.by_species[s.id];
+        if(v && v > 0) arr.push({ id:s.id, name:s.name, count:v });
+      });
+      arr.sort(function(a,b){ return b.count-a.count; });
+      active = arr;
+      total = c.total;
+      isWorld = false;
+      reset.style.visibility = "visible";
+      lead.textContent = "Killed so far this year in " + displayName(scopeName);
+      note.textContent = "· " + displayName(scopeName);
+    }
+
+    perYear = total;
+    perSecond = total/SECONDS_PER_YEAR;
+    renderPace(total);
+    renderSpecies(active, total, isWorld);
+    // immediate paint
+    tick(true);
+  }
+
+  function displayName(n){
+    // light touch-ups for the longest official names
+    return n;
+  }
+
+  /* ---------- animation ---------- */
+  function tick(force){
+    var now = Date.now();
+    var sinceYear = perSecond * ((now - yearStartMs)/1000);
+    big.set(sinceYear);
+    var opened = perSecond * ((now - openedMs)/1000);
+    sinceOpenEl.textContent = commas(opened);
+    for(var i=0;i<speciesCounters.length;i++){
+      var sc = speciesCounters[i];
+      sc.el.textContent = commas(sc.perSecond * ((now - yearStartMs)/1000));
+    }
+  }
+
+  function loop(){ tick(false); requestAnimationFrame(loop); }
+
+  /* ---------- boot ---------- */
+  function boot(data){
+    DATA = data;
+
+    // scope selector (alphabetical for findability)
+    var sel = document.getElementById("scopeSelect");
+    var optW = document.createElement("option");
+    optW.value = "__world__"; optW.textContent = "the whole world";
+    sel.appendChild(optW);
+    DATA.countries.slice().sort(function(a,b){ return a.name.localeCompare(b.name); }).forEach(function(c){
+      var o = document.createElement("option");
+      o.value = c.name; o.textContent = c.name;
+      sel.appendChild(o);
+    });
+    sel.addEventListener("change", function(){ applyScope(sel.value); });
+    document.getElementById("scopeReset").addEventListener("click", function(){
+      sel.value = "__world__"; applyScope("__world__");
+    });
+
+    // footer text
+    var m = DATA.meta;
+    var yrs = m.reference_years.slice().sort(function(a,b){return a-b;});
+    var yrText = (yrs.length>1)
+      ? ("latest available year (" + Math.max.apply(null,yrs) + "; two minor series " + Math.min.apply(null,yrs) + ")")
+      : ("year " + yrs[0]);
+    document.getElementById("srcLine").innerHTML =
+      "Source: <a href=\"" + m.source_url + "\" rel=\"noopener\">FAOSTAT</a> — " +
+      "the UN Food and Agriculture Organization's record of animals slaughtered for meat, " + yrText + ". " +
+      "Worldwide, that is <b style=\"color:var(--ink-soft)\">" + commas(DATA.world_total) + "</b> land animals in a single year.";
+    document.getElementById("breathNote").textContent =
+      "“Per breath” uses a placeholder of " + m.breaths_per_second + " breaths per second.";
+    document.getElementById("genLine").textContent = "Data compiled " + m.generated + ".";
+
+    applyScope("__world__");
+    if(reduceMotion){
+      tick(true);
+      setInterval(function(){ tick(false); }, 1000);
+    } else {
+      requestAnimationFrame(loop);
+    }
+  }
+
+  function fail(msg){
+    document.getElementById("bigCounter").innerHTML =
+      "<span class='loaderr' style='font-size:1.2rem'>" + msg + "</span>";
+  }
+
+  // Load data, then (re)measure once fonts are ready so digit widths are exact.
+  fetch("data.json", {cache:"no-cache"})
+    .then(function(r){ if(!r.ok) throw new Error(r.status); return r.json(); })
+    .then(function(data){
+      if(document.fonts && document.fonts.ready){
+        document.fonts.ready.then(function(){ boot(data); });
+      } else {
+        boot(data);
+      }
+    })
+    .catch(function(e){ fail("The count could not be loaded."); console.error(e); });
+})();
+</script>
+</body>
+</html>
