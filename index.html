@@ -307,23 +307,11 @@
     transition:transform .25s ease,color .2s;
   }
   .sp.open .kpi-name .tw{transform:rotate(90deg);color:var(--muted)}
-  .kpi-share{
-    color:var(--muted);font-size:.82rem;font-style:italic;flex:none;
-    font-variant-numeric:tabular-nums;
-  }
-  .bar{
-    position:relative;height:2px;margin:.7rem 0 .9rem;
-    background:var(--line);overflow:hidden;
-  }
-  .bar i{
-    position:absolute;left:0;top:0;bottom:0;display:block;
-    background:linear-gradient(90deg,var(--ox-soft),var(--ox));
-    min-width:1px;
-  }
   .kpi-big{
     font-size:clamp(1.2rem,3.7vw,1.62rem);
     line-height:1.05;color:var(--ink);white-space:nowrap;
     font-variant-numeric:lining-nums tabular-nums;
+    margin:.95rem 0 0;
   }
   .kpi-cap{
     color:var(--muted);font-size:.7rem;letter-spacing:.13em;
@@ -348,6 +336,11 @@
     transition:height .32s ease;
   }
   .drill-inner{padding:.85rem 0 .1rem;margin-top:.6rem;border-top:1px solid var(--line)}
+  .drill-cap{
+    color:var(--muted);font-size:.7rem;letter-spacing:.13em;
+    text-transform:uppercase;margin:0 0 .55rem;
+  }
+  .drill-cap em{font-style:italic;text-transform:none;letter-spacing:.01em;color:var(--faint)}
   .drill table{width:100%;border-collapse:collapse}
   .drill td{
     padding:.34rem 0;border-bottom:1px solid var(--line);
@@ -385,7 +378,7 @@
 <main>
   <div class="topbar">
     <p class="kicker">A live memorial</p>
-    <span class="version" id="version">v1.8</span>
+    <span class="version" id="version">v1.9</span>
   </div>
   <h1>Killed for food</h1>
 
@@ -473,8 +466,11 @@
   /* ---------- state ---------- */
   var DATA = null;
   var perYear = 0, perSecond = 0;     // active scope rate
-  var yearStartMs = Date.UTC(new Date().getUTCFullYear(), 0, 1);
-  var openedMs = Date.now();
+  var yearStartMs = Date.UTC(new Date().getUTCFullYear(), 0, 1);   // whole second (ms = 0)
+  // Floor the open time to a whole second too, so that in Ticking mode every
+  // figure (year counts, since-opened counts, and the h:mm:ss stopwatch) steps
+  // on the same wall-clock second boundary instead of drifting out of phase.
+  var openedMs = Math.floor(Date.now()/1000)*1000;
 
   var bigEl = document.getElementById("bigCounter");
   var sinceOpenEl = document.getElementById("sinceOpen");
@@ -541,14 +537,11 @@
     var ul = document.getElementById("speciesList");
     ul.textContent = "";
     speciesCounters = [];
-    var maxCount = activeSpecies.reduce(function(m,s){ return Math.max(m, s.count); }, 0) || 1;
-
     activeSpecies.forEach(function(s){
-      var share = total ? s.count/total : 0;
       var li = document.createElement("li");
       li.className = "sp" + (isWorld ? " drillable" : "");
 
-      // header — species name (with drill chevron in world scope) and share
+      // header — species name (with drill chevron in world scope)
       var head = document.createElement("div");
       head.className = "kpi-head";
       var name = document.createElement("span");
@@ -559,19 +552,8 @@
       }
       var nm = document.createElement("span"); nm.textContent = s.name;
       name.appendChild(nm);
-      var shareEl = document.createElement("span");
-      shareEl.className = "kpi-share";
-      shareEl.textContent = (share*100 >= 0.1 ? (share*100).toFixed(1) : (share*100).toFixed(2)) + "%";
-      head.appendChild(name); head.appendChild(shareEl);
+      head.appendChild(name);
       li.appendChild(head);
-
-      // proportion bar
-      var bar = document.createElement("div");
-      bar.className = "bar";
-      var fill = document.createElement("i");
-      fill.style.width = Math.max(0.4, (s.count/maxCount)*100) + "%";
-      bar.appendChild(fill);
-      li.appendChild(bar);
 
       // the metric: killed so far this year (live, Flowing/Ticking)
       var big = document.createElement("div");
@@ -589,7 +571,7 @@
       var v1 = document.createElement("dd"); v1.className = "live"; v1.textContent = "0";
       s1.appendChild(k1); s1.appendChild(v1);
       var s2 = document.createElement("div"); s2.className = "kpi-stat";
-      var k2 = document.createElement("dt"); k2.textContent = "A year (" + s.year + ")";
+      var k2 = document.createElement("dt"); k2.textContent = s.year + " total";
       var v2 = document.createElement("dd"); v2.textContent = commas(s.count);
       s2.appendChild(k2); s2.appendChild(v2);
       stats.appendChild(s1); stats.appendChild(s2);
@@ -632,6 +614,14 @@
 
   function buildDrill(inner, s){
     var rows = topCountriesForSpecies(s.id);
+    // Make clear this is a breakdown of the annual total, not the live count.
+    var cap = document.createElement("div");
+    cap.className = "drill-cap";
+    cap.appendChild(document.createTextNode(s.year + " total, by country "));
+    var capEm = document.createElement("em");
+    capEm.textContent = "— not the running count above";
+    cap.appendChild(capEm);
+    inner.appendChild(cap);
     var table = document.createElement("table");
     var shown = rows.slice(0, 10);
     shown.forEach(function(r, i){
@@ -718,11 +708,13 @@
   var SUB = [ [1e12,"Trillion"], [1e9,"Billion"], [1e6,"Million"] ];
   function tick(force){
     var now = Date.now();
-    // Same elapsed-time math for both modes; the only difference is cadence.
-    // Flowing: continuous elapsed seconds -> the number changes every frame.
-    // Ticking: elapsed seconds floored -> it holds, then jumps each second.
-    var rawYear = (now - yearStartMs)/1000;
-    var yearSec = opts.ticking ? Math.floor(rawYear) : rawYear;
+    // Derive every count from a single clock so they stay in lockstep.
+    // Flowing: the live timestamp -> each frame advances continuously.
+    // Ticking: that timestamp floored to the whole second -> all figures hold,
+    // then jump together on the same wall-clock second (since yearStartMs and
+    // openedMs are both whole seconds, yearSec/openSec step at the same instant).
+    var clock = opts.ticking ? Math.floor(now/1000)*1000 : now;
+    var yearSec = (clock - yearStartMs)/1000;
     var sinceYear = perSecond * yearSec;
     bigEl.textContent = commas(sinceYear);
 
@@ -735,8 +727,7 @@
       subNumEl.textContent = commas(lead);
     } else if(!bigSubEl.hidden){ bigSubEl.hidden=true; }
 
-    var rawOpen = (now - openedMs)/1000;
-    var openSec = opts.ticking ? Math.floor(rawOpen) : rawOpen;
+    var openSec = (clock - openedMs)/1000;
     sinceOpenEl.textContent = commas(perSecond * openSec);
 
     // page stopwatch (h:mm:ss) — always running, both modes
