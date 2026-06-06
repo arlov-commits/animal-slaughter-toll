@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="A slaughter hook with a drop of blood">
+  <rect width="32" height="32" rx="6" fill="#0a0a0b"/>
+  <!-- meat hook: eye ring, shank, and curled barb -->
+  <g fill="none" stroke="#e9e4da" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="15.5" cy="6.4" r="2.3"/>
+    <path d="M15.5 8.7 V 17.4 C 15.5 22.6 9.7 23.2 9.7 18.2 C 9.7 15.4 12.8 15.1 13.3 17.7"/>
+  </g>
+  <!-- a single drop of blood, falling -->
+  <path d="M21.9 16.8 C 21.9 16.8 19.2 20.4 19.2 22.4 A 2.7 2.7 0 1 0 24.6 22.4 C 24.6 20.4 21.9 16.8 21.9 16.8 Z" fill="#9e2b2b"/>
+</svg>

@@ -6,6 +6,9 @@
 <title>Killed for food — a live count</title>
 <meta name="description" content="A live, somber count of the land animals killed for food worldwide, counting up in real time. Based on FAOSTAT slaughter data.">
 <meta name="color-scheme" content="dark">
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
+<link rel="alternate icon" type="image/png" sizes="32x32" href="favicon-32.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,500;1,400&display=swap" rel="stylesheet">
@@ -124,7 +127,87 @@
   .hero .lead{
     font-size:.78rem;letter-spacing:.34em;text-transform:uppercase;
     color:var(--muted);margin:0 0 1rem;font-weight:500;
+    position:relative;display:flex;align-items:center;gap:.55rem;
   }
+
+  /* methodology tooltip */
+  .info{
+    -webkit-appearance:none;appearance:none;background:none;border:none;
+    padding:0;margin:0;cursor:help;line-height:0;flex:none;
+  }
+  .info-mark{
+    display:inline-flex;align-items:center;justify-content:center;
+    width:1.05rem;height:1.05rem;border-radius:50%;
+    border:1px solid var(--line-strong);color:var(--muted);
+    font-size:.62rem;font-style:italic;letter-spacing:0;
+    text-transform:none;transition:color .2s,border-color .2s;
+  }
+  .info:hover .info-mark,.info:focus-visible .info-mark,.info[aria-expanded="true"] .info-mark{
+    color:var(--ink-soft);border-color:var(--muted);
+  }
+  .info:focus-visible{outline:none}
+  .tip{
+    position:absolute;top:calc(100% + .7rem);left:0;z-index:5;
+    width:min(30rem,82vw);
+    background:#15141a;border:1px solid var(--line-strong);
+    border-radius:3px;
+    padding:.85rem 1rem;
+    color:var(--ink-soft);
+    font-size:.84rem;letter-spacing:.01em;line-height:1.55;
+    text-transform:none;font-weight:400;
+    box-shadow:0 12px 40px rgba(0,0,0,.5);
+    opacity:0;visibility:hidden;transform:translateY(-3px);
+    transition:opacity .18s ease,transform .18s ease,visibility .18s;
+    pointer-events:none;
+  }
+  .tip::before{
+    content:"";position:absolute;bottom:100%;left:.3rem;
+    border:6px solid transparent;border-bottom-color:#15141a;
+  }
+  .info:hover .tip,.info:focus-within .tip,.info[aria-expanded="true"] .tip{
+    opacity:1;visibility:visible;transform:none;
+  }
+
+  /* subline under the "since you opened" count */
+  .subline{
+    color:var(--muted);font-size:.92rem;margin:.5rem 0 0;
+    font-variant-numeric:tabular-nums;min-height:1.2em;letter-spacing:.01em;
+  }
+  .subline .sw{color:var(--ink-soft)}
+  .subline .lbl{color:var(--faint);font-style:italic}
+
+  /* experimental display toggles */
+  .experiments{
+    display:flex;align-items:center;flex-wrap:wrap;gap:.55rem .7rem;
+    margin:1.6rem 0 0;
+  }
+  .experiments .exp-label{
+    font-size:.66rem;letter-spacing:.28em;text-transform:uppercase;
+    color:var(--faint);margin-right:.2rem;
+  }
+  .tgl{
+    -webkit-appearance:none;appearance:none;cursor:pointer;
+    font-family:var(--serif);font-size:.82rem;letter-spacing:.02em;
+    color:var(--muted);background:transparent;
+    border:1px solid var(--line);border-radius:999px;
+    padding:.2rem .7rem .26rem .6rem;
+    display:inline-flex;align-items:center;gap:.42rem;
+    transition:color .2s,border-color .2s,background .2s;
+  }
+  .tgl .dot{
+    width:.46rem;height:.46rem;border-radius:50%;flex:none;
+    border:1px solid var(--muted);background:transparent;
+    transition:background .2s,border-color .2s,box-shadow .2s;
+  }
+  .tgl:hover{color:var(--ink-soft);border-color:var(--line-strong)}
+  .tgl[aria-checked="true"]{
+    color:var(--ink);border-color:var(--ox);
+  }
+  .tgl[aria-checked="true"] .dot{
+    background:var(--ox);border-color:var(--ox);
+    box-shadow:0 0 6px rgba(126,42,38,.7);
+  }
+  .tgl:focus-visible{outline:none;border-color:var(--ink-soft)}
   .counter{
     font-size:clamp(2.3rem,11.5vw,6.4rem);
     line-height:1;
@@ -247,6 +330,7 @@
     main{animation:none;opacity:1}
     .drill{transition:none}
     .sp .tw{transition:none}
+    .tip,.tgl,.tgl .dot,.info-mark{transition:none}
   }
 </style>
 </head>
@@ -254,10 +338,9 @@
 <main>
   <div class="topbar">
     <p class="kicker">A live memorial</p>
-    <span class="version" id="version">v1.0</span>
+    <span class="version" id="version">v1.1</span>
   </div>
   <h1>Killed for food</h1>
-  <p class="epigraph">Land animals, slaughtered worldwide. Numbers this large stop meaning anything. Each one was an animal that was alive, and then was not.</p>
 
   <div class="scope">
     <label for="scopeSelect">Counting</label>
@@ -266,10 +349,23 @@
   </div>
 
   <div class="hero" id="hero">
-    <p class="lead" id="heroLead">Killed so far this year</p>
+    <p class="lead" id="heroLead">
+      <span id="leadText">Killed so far this year</span>
+      <button class="info" id="methodInfo" type="button" aria-expanded="false" aria-label="How this number is calculated">
+        <span class="info-mark" aria-hidden="true">i</span>
+        <span class="tip" role="tooltip" id="methodTip"></span>
+      </button>
+    </p>
     <div class="counter" id="bigCounter" aria-live="off">—</div>
     <div class="rule"></div>
     <p class="sub"><b id="sinceOpen">0</b> have been killed since you opened this page.</p>
+    <p class="subline" id="subline"></p>
+    <div class="experiments" id="experiments">
+      <span class="exp-label">display</span>
+      <button class="tgl" id="tglCompact" type="button" role="switch" aria-checked="false"><span class="dot" aria-hidden="true"></span>compact numbers</button>
+      <button class="tgl" id="tglStopwatch" type="button" role="switch" aria-checked="false"><span class="dot" aria-hidden="true"></span>stopwatch</button>
+      <button class="tgl" id="tglOpened" type="button" role="switch" aria-checked="false"><span class="dot" aria-hidden="true"></span>show opened-at time</button>
+    </div>
   </div>
 
   <section aria-labelledby="paceHead">
@@ -299,49 +395,90 @@
   var fmt = new Intl.NumberFormat("en-US");
   function commas(n){ return fmt.format(Math.max(0, Math.floor(n))); }
 
-  /* ---------- jitter-free counter (fixed-width measured cells) ---------- */
-  function Odometer(el){
-    this.el = el; this.cells = []; this.text = "";
-    this.dw = 0; this.cw = 0; this.measured = false;
-  }
-  Odometer.prototype.measure = function(){
-    var probe = document.createElement("span");
-    probe.className = "counter";
-    probe.style.position = "absolute";
-    probe.style.visibility = "hidden";
-    probe.style.whiteSpace = "nowrap";
-    probe.textContent = "0000000000";
-    this.el.parentNode.appendChild(probe);
-    this.dw = probe.getBoundingClientRect().width / 10;
-    probe.textContent = ",,,,,,,,,,";
-    this.cw = probe.getBoundingClientRect().width / 10;
-    probe.parentNode.removeChild(probe);
-    this.measured = true;
+  /* ---------- experimental display options ---------- */
+  var opts = { compact:false, stopwatch:false, subOpened:false };
+  try {
+    var saved = JSON.parse(localStorage.getItem("astc.opts") || "{}");
+    if(saved && typeof saved === "object"){
+      opts.compact = !!saved.compact;
+      opts.stopwatch = !!saved.stopwatch;
+      opts.subOpened = !!saved.subOpened;
+    }
+  } catch(e){}
+  function saveOpts(){ try{ localStorage.setItem("astc.opts", JSON.stringify(opts)); }catch(e){} }
+
+  var FMT = {
+    dec3:  new Intl.NumberFormat("en-US",{minimumFractionDigits:3,maximumFractionDigits:3}),
+    comp2: new Intl.NumberFormat("en-US",{notation:"compact",minimumFractionDigits:2,maximumFractionDigits:2}),
+    comp4: new Intl.NumberFormat("en-US",{notation:"compact",minimumFractionDigits:4,maximumFractionDigits:4})
   };
-  Odometer.prototype.set = function(value){
-    if(!this.measured) this.measure();
-    var s = commas(value);
-    if(s.length !== this.text.length){
-      // rebuild cells
+  // Format one of the two live count-ups according to the active toggles.
+  function formatCount(value){
+    value = value > 0 ? value : 0;
+    if(opts.compact){ return (opts.stopwatch ? FMT.comp4 : FMT.comp2).format(value); }
+    if(opts.stopwatch){ return FMT.dec3.format(value); }
+    return fmt.format(Math.floor(value));
+  }
+  // Elapsed time as a running stopwatch: [H:]MM:SS.cc
+  function formatStopwatch(ms){
+    var cs = Math.floor((ms > 0 ? ms : 0) / 10);
+    var s = Math.floor(cs/100); cs = cs % 100;
+    var m = Math.floor(s/60);   s = s % 60;
+    var h = Math.floor(m/60);   m = m % 60;
+    function p(n){ return n<10 ? "0"+n : ""+n; }
+    return (h>0 ? (h+":"+p(m)+":"+p(s)) : (m+":"+p(s))) + "." + p(cs);
+  }
+
+  /* ---------- jitter-free counter: one fixed-width cell per character,
+       widths measured from the element's own font (handles digits,
+       separators, decimals and compact suffixes like K/M/B) ---------- */
+  function Odometer(el){ this.el = el; this.cells = []; this.text = ""; this.w = {}; this.probe = null; }
+  Odometer.prototype.charWidth = function(ch){
+    if(this.w[ch] != null) return this.w[ch];
+    if(!this.probe){
+      var cs = getComputedStyle(this.el);
+      var pr = document.createElement("span");
+      pr.style.cssText = "position:absolute;left:-9999px;top:0;visibility:hidden;white-space:pre;letter-spacing:normal";
+      pr.style.fontFamily = cs.fontFamily;
+      pr.style.fontSize = cs.fontSize;
+      pr.style.fontWeight = cs.fontWeight;
+      pr.style.fontStyle = cs.fontStyle;
+      pr.style.fontVariantNumeric = cs.fontVariantNumeric;
+      document.body.appendChild(pr);
+      this.probe = pr;
+    }
+    this.probe.textContent = new Array(9).join(ch); // 8 copies
+    var width = this.probe.getBoundingClientRect().width / 8;
+    this.w[ch] = width;
+    return width;
+  };
+  Odometer.prototype.cellClass = function(ch){ return "cell" + (/[0-9]/.test(ch) ? "" : " sep"); };
+  Odometer.prototype.set = function(str){
+    if(str === this.text) return;
+    if(str.length !== this.text.length){
       this.el.textContent = "";
       this.cells = [];
-      for(var i=0;i<s.length;i++){
-        var ch = s[i];
+      for(var i=0;i<str.length;i++){
+        var ch = str[i];
         var span = document.createElement("span");
-        var sep = (ch === ",");
-        span.className = "cell" + (sep ? " sep" : "");
-        span.style.width = (sep ? this.cw : this.dw) + "px";
+        span.className = this.cellClass(ch);
+        span.style.width = this.charWidth(ch) + "px";
         span.textContent = ch;
         this.el.appendChild(span);
         this.cells.push(span);
       }
-      this.text = s;
+      this.text = str;
       return;
     }
-    for(var j=0;j<s.length;j++){
-      if(s[j] !== this.text[j]){ this.cells[j].textContent = s[j]; }
+    for(var j=0;j<str.length;j++){
+      if(str[j] !== this.text[j]){
+        var c = this.cells[j];
+        c.textContent = str[j];
+        c.style.width = this.charWidth(str[j]) + "px";
+        c.className = this.cellClass(str[j]);
+      }
     }
-    this.text = s;
+    this.text = str;
   };
 
   /* ---------- state ---------- */
@@ -352,6 +489,10 @@
 
   var big = new Odometer(document.getElementById("bigCounter"));
   var sinceOpenEl = document.getElementById("sinceOpen");
+  var sublineEl = document.getElementById("subline");
+  var leadTextEl = document.getElementById("leadText");
+  var methodTipEl = document.getElementById("methodTip");
+  var swPre, swText, swPost, openedAtStr = "";
   var speciesCounters = []; // {el, perSecond}
 
   function paceRows(annual){
@@ -503,17 +644,17 @@
   /* ---------- scope ---------- */
   function applyScope(scopeName){
     var reset = document.getElementById("scopeReset");
-    var lead = document.getElementById("heroLead");
     var note = document.getElementById("spScopeNote");
-    var active, total, isWorld;
+    var active, total, isWorld, scopeLabel;
 
     if(scopeName === "__world__"){
       active = DATA.species;
       total = DATA.world_total;
       isWorld = true;
       reset.style.visibility = "hidden";
-      lead.textContent = "Killed so far this year";
+      leadTextEl.textContent = "Killed so far this year";
       note.textContent = "";
+      scopeLabel = "the world";
     } else {
       var c = DATA.countries.find(function(x){ return x.name === scopeName; });
       var arr = [];
@@ -526,9 +667,18 @@
       total = c.total;
       isWorld = false;
       reset.style.visibility = "visible";
-      lead.textContent = "Killed so far this year in " + displayName(scopeName);
+      leadTextEl.textContent = "Killed so far this year in " + displayName(scopeName);
       note.textContent = "· " + displayName(scopeName);
+      scopeLabel = displayName(scopeName);
     }
+
+    // methodology tooltip, reflecting the current scope
+    methodTipEl.textContent =
+      "A constant-rate projection, not a live feed. We take FAOSTAT's latest " +
+      "annual total for " + scopeLabel + " — " + commas(total) + " land animals " +
+      "a year — divide it into a per-second rate (÷ " + commas(SECONDS_PER_YEAR) +
+      " seconds in a year), and multiply by the time elapsed since 1 January, " +
+      "00:00 UTC. It assumes the year's toll is spread evenly across the year.";
 
     perYear = total;
     perSecond = total/SECONDS_PER_YEAR;
@@ -543,13 +693,26 @@
     return n;
   }
 
+  /* ---------- subline (the running stopwatch / opened-at reference) ---------- */
+  function setSublineMode(){
+    if(opts.subOpened){
+      swPre.textContent = "page opened at ";
+      swText.textContent = openedAtStr;
+      swPost.textContent = "";
+    } else {
+      swPre.textContent = "";
+      swPost.textContent = " on this page";
+      // swText is refreshed every frame by tick()
+    }
+  }
+
   /* ---------- animation ---------- */
   function tick(force){
     var now = Date.now();
     var sinceYear = perSecond * ((now - yearStartMs)/1000);
-    big.set(sinceYear);
-    var opened = perSecond * ((now - openedMs)/1000);
-    sinceOpenEl.textContent = commas(opened);
+    big.set(formatCount(sinceYear));
+    sinceOpenEl.textContent = formatCount(perSecond * ((now - openedMs)/1000));
+    if(!opts.subOpened){ swText.textContent = formatStopwatch(now - openedMs); }
     for(var i=0;i<speciesCounters.length;i++){
       var sc = speciesCounters[i];
       sc.el.textContent = commas(sc.perSecond * ((now - yearStartMs)/1000));
@@ -562,12 +725,12 @@
   function boot(data){
     DATA = data;
 
-    // scope selector (alphabetical for findability)
+    // scope selector — countries ordered by total killed, descending
     var sel = document.getElementById("scopeSelect");
     var optW = document.createElement("option");
     optW.value = "__world__"; optW.textContent = "the whole world";
     sel.appendChild(optW);
-    DATA.countries.slice().sort(function(a,b){ return a.name.localeCompare(b.name); }).forEach(function(c){
+    DATA.countries.slice().sort(function(a,b){ return b.total - a.total; }).forEach(function(c){
       var o = document.createElement("option");
       o.value = c.name; o.textContent = c.name;
       sel.appendChild(o);
@@ -576,6 +739,35 @@
     document.getElementById("scopeReset").addEventListener("click", function(){
       sel.value = "__world__"; applyScope("__world__");
     });
+
+    // subline scaffold + the time this page was opened
+    sublineEl.textContent = "";
+    swPre = document.createElement("span"); swPre.className = "lbl";
+    swText = document.createElement("span"); swText.className = "sw";
+    swPost = document.createElement("span"); swPost.className = "lbl";
+    sublineEl.appendChild(swPre); sublineEl.appendChild(swText); sublineEl.appendChild(swPost);
+    try { openedAtStr = new Date(openedMs).toLocaleTimeString(); }
+    catch(e){ openedAtStr = new Date(openedMs).toString(); }
+    setSublineMode();
+
+    // experimental display toggles
+    var tC = document.getElementById("tglCompact"),
+        tS = document.getElementById("tglStopwatch"),
+        tO = document.getElementById("tglOpened");
+    function reflect(btn,on){ btn.setAttribute("aria-checked", on ? "true" : "false"); }
+    reflect(tC,opts.compact); reflect(tS,opts.stopwatch); reflect(tO,opts.subOpened);
+    tC.addEventListener("click", function(){ opts.compact=!opts.compact; reflect(tC,opts.compact); saveOpts(); tick(true); });
+    tS.addEventListener("click", function(){ opts.stopwatch=!opts.stopwatch; reflect(tS,opts.stopwatch); saveOpts(); tick(true); });
+    tO.addEventListener("click", function(){ opts.subOpened=!opts.subOpened; reflect(tO,opts.subOpened); saveOpts(); setSublineMode(); tick(true); });
+
+    // methodology tooltip: tap to pin on touch, Escape / outside-click to close
+    var info = document.getElementById("methodInfo");
+    info.addEventListener("click", function(e){
+      e.stopPropagation();
+      info.setAttribute("aria-expanded", info.getAttribute("aria-expanded")==="true" ? "false" : "true");
+    });
+    document.addEventListener("click", function(){ info.setAttribute("aria-expanded","false"); });
+    document.addEventListener("keydown", function(e){ if(e.key==="Escape") info.setAttribute("aria-expanded","false"); });
 
     // footer text
     var m = DATA.meta;
