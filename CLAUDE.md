@@ -1,7 +1,27 @@
 # animal-slaughter-toll — project instructions
 
+## What it is
+
 A static GitHub Pages memorial that counts up, in real time, the land animals
-slaughtered for food worldwide. See `README.md` for the data source and method.
+slaughtered for food worldwide. The tone is **somber — an inscription, not a
+dashboard**; keep copy and styling restrained.
+
+The site is **served from the repo root** by GitHub Pages. `index.html` is the
+whole site (markup + CSS + JS in one file) and at runtime it `fetch`es one
+file, `data.json`, also in the root. There is no server and no build step on
+the serving path — what is committed in root is what ships.
+
+The data pipeline is:
+
+```
+data/raw/animals_killed_by_species_country_year.csv
+        → scripts/build_data.py
+        → data.json   (repo root)
+        → index.html  (fetches data.json)
+```
+
+`data.json` is committed, so the build only needs to run when the source CSV or
+the build logic changes; re-commit the regenerated `data.json` when it does.
 
 ## Versioning & commit workflow (standing instruction)
 
@@ -18,3 +38,89 @@ For **every** change to this project, without being asked again:
 3. **Commit and push to `main`.**
 
 Versioning started at **v1.0**.
+
+## Repo layout
+
+```
+animal-slaughter-toll/
+├── index.html            # the whole site (markup + CSS + JS)
+├── data.json             # generated; fetched by index.html at runtime
+├── favicon.svg, favicon-32.png, apple-touch-icon.png
+├── .nojekyll             # tells Pages to serve files verbatim
+├── CLAUDE.md, README.md
+├── scripts/
+│   └── build_data.py     # data/raw/…csv → data.json
+└── data/
+    ├── README.md
+    └── raw/
+        ├── animals_killed_by_species_country_year.csv   # the only CSV the build reads
+        └── reference/    # 13 FAO code-lookup tables (provenance only, unused by code)
+```
+
+Keep `index.html`, `data.json`, the favicons, and `.nojekyll` in **root** —
+that is what Pages serves. (Planned for the sea feature: `SEA_METHODOLOGY.md`
+and `config/sea_summary.csv` — see below.)
+
+## Land data: counting traps that must never regress
+
+The published toll (~86B/year) is only credible because two FAOSTAT pitfalls are
+handled. If a future rebuild of the source CSV reintroduces either, the headline
+number silently blows up or collapses. Guard both:
+
+1. **Co-product double-counting.** Each slaughtered animal shows up in FAOSTAT
+   under several products — meat, fats, offal, hides/skins — often with
+   *identical* head counts. Summing products counts the same animal 3–4×. Count
+   **one primary "Producing/Slaughtered Animals" item per species**, never the
+   sum of co-products.
+2. **Mixed thousand-units.** Poultry and small stock (chickens, ducks, turkeys,
+   geese, rabbits) are reported in **units of 1000 head**, while cattle, pigs,
+   sheep, etc. are in single head. Each "thousand head" series must be
+   **×1000**. Miss it and chickens — ~89% of the total — collapse by three
+   orders of magnitude.
+
+The current `data/raw/…csv` is already in single-head, one-item-per-species
+form; `build_data.py` only drops the FAO "China" aggregate (area code 351, which
+equals mainland + HK + Macao + Taiwan) and anchors years (below).
+
+## Anchoring
+
+Figures are anchored to the **latest complete year, 2023**. FAO's 2024 data is
+still partial/under revision and is treated as incomplete. `build_data.py` uses
+2023 for every series that has it; the two negligible series (`game`,
+`mammals_other`) end in 2017 and fall back to their own latest year. The
+counter projects the annual total at a constant per-second rate.
+
+## Sea / aquatic animals (next feature — guardrails)
+
+Aquatic animals are the largest group by number and will be added separately.
+When that work lands:
+
+- Methodology lives in **`SEA_METHODOLOGY.md`**; the figures the site uses come
+  from **`config/sea_summary.csv`**.
+- The headline sea figure uses the **LOW** estimate (conservative by design).
+- `feed_fish` (fish caught to feed farmed animals) is a **subset** of the totals
+  — show it as a breakdown, **never add it on top** or it double-counts.
+
+## Verification anchors
+
+After any data change, sanity-check against these. If they drift, something
+regressed (see traps above):
+
+- **Land:** ~**86 billion**/year (86,076,509,475), ≈ **2,728**/second,
+  **chickens ≈ 89%** of the total.
+- **Sea (when added):** floor of ~**1.58 trillion**/year.
+
+## Conventions
+
+- **Commit to `main`**, one logical fix per commit, **version bump on every
+  change** (see above). Keep commits internally consistent.
+- The site is **fully static** — no backend, no framework. `localStorage` is
+  used **only for UI preferences** (counter mode + opened-at toggle, under key
+  `astc.opts`); that is acceptable. Don't put data or state that the site
+  depends on into `localStorage`.
+- **CSV I/O:** source CSVs carry a UTF-8 BOM — read with `encoding="utf-8-sig"`.
+  Any CSV the project *writes* (e.g. `config/sea_summary.csv`) should be emitted
+  with a **UTF-8 BOM** for spreadsheet compatibility. `data.json` is plain
+  UTF-8 JSON (no BOM).
+- Any keyboard shortcuts are **Ctrl-based**, to avoid clobbering single-key
+  browser/AT behavior.
