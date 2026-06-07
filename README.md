@@ -15,7 +15,7 @@ breakdown by species that drills down into individual countries.
 - A live counter of animals killed **so far this year**, plus a quieter count
   of how many have died **since you opened the page**.
 - The pace at seven time scales, down to **per breath** (a placeholder of
-  15 breaths per second — change `breaths_per_second` in `build_data.py`).
+  15 breaths per minute — change `breaths_per_minute` in `scripts/build_data.py`).
 - **By species:** all 19 FAO species, ranked, each expandable to its leading
   countries.
 - A scope selector to recompute the entire clock **for a single country**.
@@ -32,12 +32,13 @@ The clock is built from `animals_killed_by_species_country_year.csv` by
 - **Drops the FAO "China" aggregate (area code 351)**, which equals the sum of
   China mainland, Hong Kong, Macao, and Taiwan — all present separately — so
   nothing is counted twice.
-- Uses, for each species, its **most recent year with data** (2024 for almost
-  everything; 2017 for the two minor "game" / "other mammals" series).
+- Anchors every series to the **latest complete year, 2023** (FAO's 2024 data
+  is still partial and treated as incomplete); the two minor "game" / "other
+  mammals" series end in 2017 and fall back to their own latest year.
 - Computes each country's figure in that same reference year, so country totals
   sum exactly to the world total.
 
-The result, **~87.6 billion land animals per year**, is written to `data.json`.
+The result, **~86.08 billion land animals per year**, is written to `data.json`.
 
 ### Honest caveats (stated on the page)
 
