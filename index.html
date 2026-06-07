@@ -252,17 +252,6 @@
   }
   .hero .sub b{font-weight:500;color:var(--ink);font-variant-numeric:tabular-nums}
 
-  /* provenance footnote under the headline figure (world scope only) */
-  .basis-note{
-    color:var(--faint);
-    font-style:italic;
-    font-size:.82rem;
-    line-height:1.5;
-    letter-spacing:.01em;
-    max-width:34rem;
-    margin:.95rem 0 0;
-  }
-
   /* ---- section frame ---- */
   section{margin:0 0 3.4rem}
   .sec-head{
@@ -371,6 +360,8 @@
   footer a{color:var(--ink-soft);text-decoration:underline;text-underline-offset:2px;text-decoration-color:var(--faint)}
   footer a:hover{color:var(--ink)}
   footer .fineprint{color:var(--faint);font-size:.84rem;margin-top:1.4rem}
+  /* provenance endnote — world scope only; inherits footer p width/margins */
+  footer .basis-note{color:var(--faint);font-style:italic;font-size:.84rem}
 
   .loaderr{color:var(--ox);font-style:italic}
 
@@ -389,7 +380,7 @@
 <main>
   <div class="topbar">
     <p class="kicker">A live memorial</p>
-    <span class="version" id="version">v2.4</span>
+    <span class="version" id="version">v2.5</span>
   </div>
   <h1>Killed for food</h1>
 
@@ -409,7 +400,6 @@
     </p>
     <div class="counter" id="bigCounter" aria-live="off">—</div>
     <p class="bigsub" id="bigSub" hidden><span class="n" id="bigSubNum"></span><span class="word" id="bigSubWord"></span></p>
-    <p class="basis-note" id="basisNote">Sum of reporting countries including FAO estimates, 2023. FAO's modeled global aggregate is somewhat higher (~100B+); we use the country-sum because every figure is individually verifiable.</p>
     <div class="rule"></div>
     <p class="sub"><b id="sinceOpen">0</b> have been killed since you opened this page.</p>
     <p class="subline" id="subline"></p>
@@ -437,6 +427,7 @@
     <p id="srcLine"></p>
     <p>These are <em>land</em> animals killed for food, counted as individuals. They do not include fish and other aquatic animals — by number the largest group of all, killed in the hundreds of billions to trillions — nor animals who die before slaughter, the day-old male chicks culled at hatcheries, or animals killed outside recorded food production. The true toll is higher than what is shown here.</p>
     <p>The pace assumes the year's killing is spread evenly across it; the live figures are a steady rate, not a live feed. The FAO "China" aggregate is excluded so its regions are not counted twice. <span id="breathNote"></span></p>
+    <p class="basis-note" id="basisNote">Sum of reporting countries including FAO estimates, 2023. FAO's modeled global aggregate is somewhat higher (~100B+); we use the country-sum because every figure is individually verifiable.</p>
     <p class="fineprint" id="genLine"></p>
   </footer>
 </main>
