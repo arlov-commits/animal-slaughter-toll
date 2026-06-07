@@ -48,8 +48,13 @@ animal-slaughter-toll/
 ├── favicon.svg, favicon-32.png, apple-touch-icon.png
 ├── .nojekyll             # tells Pages to serve files verbatim
 ├── CLAUDE.md, README.md
+├── SEA_METHODOLOGY.md    # sea-data sources, framing, guardrails (see below)
 ├── scripts/
-│   └── build_data.py     # data/raw/…csv → data.json
+│   ├── build_data.py            # data/raw/…csv → data.json
+│   └── parse_clean_sheets.py    # fishcount sheets → config/sea_species_detail.csv
+├── config/
+│   ├── sea_summary.csv          # headline sea figures (low/high per category)
+│   └── sea_species_detail.csv   # per-species sea detail
 └── data/
     ├── README.md
     └── raw/
@@ -58,8 +63,7 @@ animal-slaughter-toll/
 ```
 
 Keep `index.html`, `data.json`, the favicons, and `.nojekyll` in **root** —
-that is what Pages serves. (Planned for the sea feature: `SEA_METHODOLOGY.md`
-and `config/sea_summary.csv` — see below.)
+that is what Pages serves.
 
 ## Land data: counting traps that must never regress
 
@@ -92,14 +96,20 @@ counter projects the annual total at a constant per-second rate.
 
 ## Sea / aquatic animals (next feature — guardrails)
 
-Aquatic animals are the largest group by number and will be added separately.
-When that work lands:
+Aquatic animals are the largest group by number. The **data and methodology
+have landed** (`SEA_METHODOLOGY.md`, `config/sea_summary.csv`,
+`config/sea_species_detail.csv`, `scripts/parse_clean_sheets.py`); **wiring
+them into the site is still pending** — `index.html` does not yet read them.
+Source is fishcount.org.uk (tonnage ÷ mean weight, so every figure is a range).
+Guardrails for that work:
 
 - Methodology lives in **`SEA_METHODOLOGY.md`**; the figures the site uses come
-  from **`config/sea_summary.csv`**.
+  from **`config/sea_summary.csv`** (per-species detail in
+  `sea_species_detail.csv`).
 - The headline sea figure uses the **LOW** estimate (conservative by design).
-- `feed_fish` (fish caught to feed farmed animals) is a **subset** of the totals
-  — show it as a breakdown, **never add it on top** or it double-counts.
+- `feed_fish` (wild fish caught for fishmeal/oil) is a **subset** of wild-caught
+  fish — it carries `counts_in_total = FALSE`; show it as a footnote, **never
+  add it on top** or it double-counts.
 
 ## Verification anchors
 
