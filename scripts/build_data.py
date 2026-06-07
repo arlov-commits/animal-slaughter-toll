@@ -1,9 +1,13 @@
 #!/usr/bin/env python3
 """Build data.json for the slaughter clock from FAOSTAT data.
 
-Source: animals_killed_by_species_country_year.csv (FAOSTAT, "Producing
-Animals/Slaughtered" element). Each row is animals slaughtered for food of a
-given species, in a country, in a year.
+Source: data/raw/animals_killed_by_species_country_year.csv (FAOSTAT,
+"Producing Animals/Slaughtered" element). Each row is animals slaughtered for
+food of a given species, in a country, in a year.
+
+Run from anywhere: `python3 scripts/build_data.py`. Paths are resolved
+relative to this file, so the CSV is read from data/raw/ and data.json is
+written to the repo root (where index.html fetches it).
 
 Method (kept deliberately conservative and reproducible):
 
@@ -20,11 +24,15 @@ Method (kept deliberately conservative and reproducible):
 """
 import csv
 import json
+import os
 import datetime as dt
 from collections import defaultdict
 
-SRC = "animals_killed_by_species_country_year.csv"
-OUT = "data.json"
+# Resolve paths relative to this script (scripts/ -> repo root), so the build
+# works no matter the current working directory.
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+SRC = os.path.join(ROOT, "data", "raw", "animals_killed_by_species_country_year.csv")
+OUT = os.path.join(ROOT, "data.json")
 CHINA_AGGREGATE = 351  # drop: equals mainland + HK + Macao + Taiwan
 TARGET_YEAR = 2023      # anchor year; 2024 is still treated as incomplete
 

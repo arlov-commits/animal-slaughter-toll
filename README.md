@@ -51,7 +51,7 @@ feed.
 ## Rebuilding the data
 
 ```bash
-python3 build_data.py     # reads the CSV, writes data.json
+python3 scripts/build_data.py   # reads data/raw/…csv, writes data.json
 ```
 
 No third-party Python packages are required.
@@ -80,8 +80,8 @@ python3 -m http.server 8000
 | File | Purpose |
 | --- | --- |
 | `index.html` | The entire site — markup, style, and logic in one file. |
-| `data.json` | Generated figures the page loads. |
-| `build_data.py` | Rebuilds `data.json` from the FAOSTAT CSV. |
-| `animals_killed_by_species_country_year.csv` | Primary source data. |
-| `FAOSTAT_data_*.csv`, `Production_Crops_Livestock_E_*.csv` | FAOSTAT reference tables (codes, elements, flags) kept for provenance. |
+| `data.json` | Generated figures the page loads (served from root). |
+| `scripts/build_data.py` | Rebuilds `data.json` from the FAOSTAT CSV. |
+| `data/raw/animals_killed_by_species_country_year.csv` | Primary source data (the only CSV the build reads). |
+| `data/raw/reference/` | FAOSTAT reference tables (codes, elements, flags) kept for provenance; see `data/README.md`. |
 | `.nojekyll` | Tells GitHub Pages to skip Jekyll processing. |
