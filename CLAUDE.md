@@ -86,6 +86,13 @@ The current `data/raw/…csv` is already in single-head, one-item-per-species
 form; `build_data.py` only drops the FAO "China" aggregate (area code 351, which
 equals mainland + HK + Macao + Taiwan) and anchors years (below).
 
+The published **86B is the auditable country-sum** (every figure traces to a
+reporting country, FAO row-level estimates included); FAO's own **World aggregate
+is higher (~104B)** for ordinary aggregation/imputation reasons — it gap-fills for
+non-reporting countries at the aggregate level. Both are legitimate FAO, and we
+**intentionally use the country-sum** so every number is individually verifiable.
+This gap is expected — not a bug to re-investigate.
+
 ## Anchoring
 
 Figures are anchored to the **latest complete year, 2023**. FAO's 2024 data is

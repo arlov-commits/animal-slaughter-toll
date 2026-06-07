@@ -252,6 +252,17 @@
   }
   .hero .sub b{font-weight:500;color:var(--ink);font-variant-numeric:tabular-nums}
 
+  /* provenance footnote under the headline figure (world scope only) */
+  .basis-note{
+    color:var(--faint);
+    font-style:italic;
+    font-size:.82rem;
+    line-height:1.5;
+    letter-spacing:.01em;
+    max-width:34rem;
+    margin:.95rem 0 0;
+  }
+
   /* ---- section frame ---- */
   section{margin:0 0 3.4rem}
   .sec-head{
@@ -378,7 +389,7 @@
 <main>
   <div class="topbar">
     <p class="kicker">A live memorial</p>
-    <span class="version" id="version">v2.3</span>
+    <span class="version" id="version">v2.4</span>
   </div>
   <h1>Killed for food</h1>
 
@@ -398,6 +409,7 @@
     </p>
     <div class="counter" id="bigCounter" aria-live="off">—</div>
     <p class="bigsub" id="bigSub" hidden><span class="n" id="bigSubNum"></span><span class="word" id="bigSubWord"></span></p>
+    <p class="basis-note" id="basisNote">Sum of reporting countries including FAO estimates, 2023. FAO's modeled global aggregate is somewhat higher (~100B+); we use the country-sum because every figure is individually verifiable.</p>
     <div class="rule"></div>
     <p class="sub"><b id="sinceOpen">0</b> have been killed since you opened this page.</p>
     <p class="subline" id="subline"></p>
@@ -672,6 +684,10 @@
       note.textContent = "· " + displayName(scopeName);
       scopeLabel = displayName(scopeName);
     }
+
+    // the provenance footnote describes the world country-sum; hide it when a
+    // single country is in scope (its figure is that country, not a sum).
+    document.getElementById("basisNote").hidden = !isWorld;
 
     // methodology tooltip, reflecting the current scope
     methodTipEl.textContent =
