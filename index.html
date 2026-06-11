@@ -86,14 +86,16 @@
 
   /* ---- scope ---- */
   .scope{
-    display:flex;align-items:baseline;gap:.6rem;flex-wrap:wrap;
     margin:0 0 3.2rem;
     padding-top:1.6rem;
     border-top:1px solid var(--line);
     color:var(--muted);
     font-size:.95rem;
+    display:flex;flex-direction:column;gap:1.1rem;
   }
-  .scope label{letter-spacing:.04em}
+  .scope-primary{display:flex;align-items:center;gap:.55rem .8rem;flex-wrap:wrap}
+  .scope-label{letter-spacing:.04em}
+  .scope-or{color:var(--faint);font-style:italic;font-size:.9rem}
   .scope select{
     appearance:none;-webkit-appearance:none;
     background:transparent;
@@ -101,7 +103,7 @@
     border:none;
     border-bottom:1px solid var(--line-strong);
     font-family:var(--serif);
-    font-size:1.05rem;
+    font-size:1rem;
     padding:.15rem 1.5rem .25rem .1rem;
     margin:0;
     cursor:pointer;
@@ -109,18 +111,10 @@
     background-position:right .35rem center,right .05rem center;
     background-size:5px 5px,5px 5px;
     background-repeat:no-repeat;
-    max-width:18rem;
+    max-width:16rem;
   }
   .scope select:focus-visible{outline:none;border-bottom-color:var(--ink)}
   .scope option{background:#16151a;color:var(--ink)}
-  .scope .reset{
-    background:none;border:none;color:var(--muted);
-    font-family:var(--serif);font-size:.92rem;cursor:pointer;
-    text-decoration:underline;text-underline-offset:3px;
-    text-decoration-color:var(--faint);padding:0;
-    visibility:hidden;
-  }
-  .scope .reset:hover{color:var(--ink-soft)}
 
   /* ---- hero counter ---- */
   .hero{margin:0 0 3.4rem}
@@ -234,7 +228,7 @@
   }
   .aquatic-controls{
     display:flex;flex-direction:column;gap:.7rem;
-    margin:1.5rem 0 0;padding-top:1.35rem;border-top:1px solid var(--line);
+    padding-top:1.05rem;border-top:1px solid var(--line);
   }
   .aquatic-controls[hidden]{display:none}
   .ac-row{display:flex;align-items:center;flex-wrap:wrap;gap:.5rem .7rem}
@@ -401,14 +395,46 @@
 <main>
   <div class="topbar">
     <p class="kicker">A live memorial</p>
-    <span class="version" id="version">v2.8</span>
+    <span class="version" id="version">v2.9</span>
   </div>
   <h1>Killed for food</h1>
 
   <div class="scope">
-    <label for="scopeSelect">Counting</label>
-    <select id="scopeSelect" aria-label="Choose what to count"></select>
-    <button class="reset" id="scopeReset" type="button">return to all animals</button>
+    <div class="scope-primary">
+      <span class="scope-label">Counting</span>
+      <div class="seg scope-seg" role="radiogroup" aria-label="What to count">
+        <button class="seg-opt" id="scopeAll" type="button" role="radio" aria-checked="true">everything</button>
+        <button class="seg-opt" id="scopeTerr" type="button" role="radio" aria-checked="false">terrestrial</button>
+        <button class="seg-opt" id="scopeAvian" type="button" role="radio" aria-checked="false">avian</button>
+        <button class="seg-opt" id="scopeAquatic" type="button" role="radio" aria-checked="false">aquatic</button>
+      </div>
+      <span class="scope-or">or</span>
+      <select id="countrySelect" aria-label="Count a single country"></select>
+    </div>
+    <div class="aquatic-controls" id="aquaticControls" hidden>
+      <div class="ac-row">
+        <span class="exp-label">sea estimate</span>
+        <div class="seg" role="radiogroup" aria-label="Sea estimate basis">
+          <button class="seg-opt" id="seaLow" type="button" role="radio" aria-checked="true">Low</button>
+          <button class="seg-opt" id="seaMid" type="button" role="radio" aria-checked="false">Mid</button>
+          <button class="seg-opt" id="seaHigh" type="button" role="radio" aria-checked="false">High</button>
+        </div>
+        <button class="info info-inline" id="basisInfo" type="button" aria-expanded="false" aria-label="Why sea figures are a range">
+          <span class="info-mark" aria-hidden="true">i</span>
+          <span class="tip" role="tooltip">Unlike the reported land counts, sea figures are estimates: fishcount derives them from FAO capture and aquaculture tonnages divided by estimated mean weights, so every figure is a range, not a precise count. Low, Mid and High set which point in that range the counter uses; the range is shown either way.</span>
+        </button>
+      </div>
+      <div class="ac-row">
+        <span class="exp-label">include</span>
+        <button class="tgl" id="tierCore" type="button" role="switch" aria-checked="true" disabled><span class="dot" aria-hidden="true"></span>Fish &amp; crustaceans</button>
+        <button class="tgl" id="tierBivalve" type="button" role="switch" aria-checked="false"><span class="dot" aria-hidden="true"></span>Bivalves</button>
+        <button class="tgl" id="tierOther" type="button" role="switch" aria-checked="false"><span class="dot" aria-hidden="true"></span>Other molluscs</button>
+        <button class="info info-inline" id="sentienceInfo" type="button" aria-expanded="false" aria-label="About sentience and what to include">
+          <span class="info-mark" aria-hidden="true">i</span>
+          <span class="tip" role="tooltip">fishcount finds strong evidence that finfish, decapod crustaceans and cephalopods are sentient. Bivalve sentience is an open question — there are almost no studies, and farmed bivalves are sessile filter-feeders. Choose which groups the count includes.</span>
+        </button>
+      </div>
+    </div>
   </div>
 
   <div class="hero" id="hero">
@@ -432,29 +458,6 @@
         <button class="seg-opt" id="modeTicking" type="button" role="radio" aria-checked="false">Ticking</button>
       </div>
       <button class="tgl" id="tglOpened" type="button" role="switch" aria-checked="false"><span class="dot" aria-hidden="true"></span>show opened-at time</button>
-    </div>
-    <div class="aquatic-controls" id="aquaticControls" hidden>
-      <div class="ac-row">
-        <span class="exp-label">sea estimate</span>
-        <div class="seg" role="radiogroup" aria-label="Sea estimate basis">
-          <button class="seg-opt" id="seaLow" type="button" role="radio" aria-checked="true">Low</button>
-          <button class="seg-opt" id="seaHigh" type="button" role="radio" aria-checked="false">High</button>
-        </div>
-        <button class="info info-inline" id="basisInfo" type="button" aria-expanded="false" aria-label="Why sea figures are a range">
-          <span class="info-mark" aria-hidden="true">i</span>
-          <span class="tip" role="tooltip">Unlike the reported land counts, sea figures are estimates: fishcount derives them from FAO capture and aquaculture tonnages divided by estimated mean weights, so every figure is a range, not a precise count. Low and High set which end of that range the counter uses; the range is shown either way.</span>
-        </button>
-      </div>
-      <div class="ac-row">
-        <span class="exp-label">include</span>
-        <button class="tgl" id="tierCore" type="button" role="switch" aria-checked="true" disabled><span class="dot" aria-hidden="true"></span>Fish &amp; crustaceans</button>
-        <button class="tgl" id="tierBivalve" type="button" role="switch" aria-checked="false"><span class="dot" aria-hidden="true"></span>Bivalves</button>
-        <button class="tgl" id="tierOther" type="button" role="switch" aria-checked="false"><span class="dot" aria-hidden="true"></span>Other molluscs</button>
-        <button class="info info-inline" id="sentienceInfo" type="button" aria-expanded="false" aria-label="About sentience and what to include">
-          <span class="info-mark" aria-hidden="true">i</span>
-          <span class="tip" role="tooltip">fishcount finds strong evidence that finfish, decapod crustaceans and cephalopods are sentient. Bivalve sentience is an open question — there are almost no studies, and farmed bivalves are sessile filter-feeders. Choose which groups the count includes.</span>
-        </button>
-      </div>
     </div>
   </div>
 
@@ -487,13 +490,15 @@
   function commas(n){ return fmt.format(Math.max(0, Math.floor(n))); }
 
   /* ---------- experimental display options ---------- */
-  var opts = { ticking:false, subOpened:false, seaHigh:false, seaBivalve:false, seaOther:false };
+  var opts = { ticking:false, subOpened:false, seaBasis:"low", seaBivalve:false, seaOther:false };
   try {
     var saved = JSON.parse(localStorage.getItem("astc.opts") || "{}");
     if(saved && typeof saved === "object"){
       opts.ticking = !!saved.ticking;
       opts.subOpened = !!saved.subOpened;
-      opts.seaHigh = !!saved.seaHigh;        // sea estimate basis: low (default) / high
+      // sea estimate basis: low (default) | mid | high (migrate old boolean)
+      opts.seaBasis = (saved.seaBasis === "mid" || saved.seaBasis === "high")
+        ? saved.seaBasis : (saved.seaHigh ? "high" : "low");
       opts.seaBivalve = !!saved.seaBivalve;  // include bivalve tier
       opts.seaOther = !!saved.seaOther;      // include gastropod + other-mollusc tier
     }
@@ -535,6 +540,13 @@
   var spHeadEl = document.getElementById("spHead");
   var aquaticControlsEl = document.getElementById("aquaticControls");
   var aquaticRangeEl = document.getElementById("aquaticRange");
+  var scopeKindBtns = {
+    "__all__": document.getElementById("scopeAll"),
+    "__terrestrial__": document.getElementById("scopeTerr"),
+    "__avian__": document.getElementById("scopeAvian"),
+    "__aquatic__": document.getElementById("scopeAquatic")
+  };
+  var countrySelectEl = document.getElementById("countrySelect");
   var swPre, swText, swPost, openedAtStr = "";
   var speciesCounters = []; // {el, perSecond}
 
@@ -732,9 +744,18 @@
       return c.counts_in_total && tiers[c.sentience_tier];
     });
   }
-  function seaBasis(){ return opts.seaHigh ? "high" : "low"; }
   function sumField(arr, f){
     return arr.reduce(function(a, x){ return a + (x[f] || 0); }, 0);
+  }
+  // Value for one sea category under the active basis. "mid" is the per-category
+  // midpoint (low+high)/2 — computed per category, then summed by callers, never
+  // as an average of the two grand totals.
+  function catValue(c){
+    if(opts.seaBasis === "mid") return (c.low + c.high) / 2;
+    return opts.seaBasis === "high" ? c.high : c.low;
+  }
+  function seaValue(cats){
+    return cats.reduce(function(a, c){ return a + catValue(c); }, 0);
   }
   // Humanised magnitude for the range text (a compact "N.NN trillion" form).
   // Display only, derived from the data at runtime — never a stored figure.
@@ -771,25 +792,31 @@
       projectionSentence(total);
   }
 
+  function reflectScopeControls(scopeName){
+    // Highlight the active kind toggle (none when a country is in scope) and
+    // mirror the country drop-down (cleared for a kind scope).
+    for(var k in scopeKindBtns){
+      scopeKindBtns[k].setAttribute("aria-checked", k === scopeName ? "true" : "false");
+    }
+    countrySelectEl.value = scopeKindBtns[scopeName] ? "" : scopeName;
+  }
+
   function applyScope(scopeName){
     currentScope = scopeName;
-    var reset = document.getElementById("scopeReset");
     var note = document.getElementById("spScopeNote");
     var items, total, lead, headLabel, basisVisible, tip, seaRange = null;
 
     if(scopeName === "__aquatic__"){
       var cats = aquaticCats();
-      var basis = seaBasis();
-      total = sumField(cats, basis);
+      total = seaValue(cats);
       seaRange = [ sumField(cats, "low"), sumField(cats, "high") ];
       items = cats.map(function(c){
-        return { name:c.category, count:c[basis], year:c.year, drillable:false };
+        return { name:c.category, count:catValue(c), year:c.year, drillable:false };
       });
       lead = "Killed so far this year";
       headLabel = "By category";
       note.textContent = "· aquatic animals";
       basisVisible = false;
-      reset.style.visibility = "visible";
       tip = aquaticTip(total);
 
     } else if(scopeName === "__terrestrial__" || scopeName === "__avian__"){
@@ -803,28 +830,25 @@
       headLabel = "By species";
       note.textContent = "· " + group + " animals";
       basisVisible = true;
-      reset.style.visibility = "visible";
       tip = landTip(total, group + " animals");
 
     } else if(scopeName === "__all__"){
       var landTotal = sumField(DATA.species, "count");   // equals world_total
       var seaCats = aquaticCats();
-      var allBasis = seaBasis();
-      var seaVal = sumField(seaCats, allBasis);
+      var seaVal = seaValue(seaCats);
       total = landTotal + seaVal;
       seaRange = [ landTotal + sumField(seaCats, "low"),
                    landTotal + sumField(seaCats, "high") ];
       items = DATA.species.map(function(s){
         return { id:s.id, name:s.name, count:s.count, year:s.year, drillable:true };
       }).concat(seaCats.map(function(c){
-        return { name:c.category, count:c[allBasis], year:c.year, drillable:false };
+        return { name:c.category, count:catValue(c), year:c.year, drillable:false };
       }));
       items.sort(function(a, b){ return b.count - a.count; });
       lead = "Killed so far this year";
       headLabel = "By species & category";
       note.textContent = "";
       basisVisible = true;
-      reset.style.visibility = "hidden";
       tip = allTip(total, landTotal, seaVal);
 
     } else {
@@ -842,9 +866,10 @@
       headLabel = "By species";
       note.textContent = "· " + scopeName;
       basisVisible = false;
-      reset.style.visibility = "visible";
       tip = landTip(total, scopeName);
     }
+
+    reflectScopeControls(scopeName);
 
     // The land provenance endnote applies only where the figure rests on the
     // FAOSTAT land country-sum (all / terrestrial / avian) — not for the
@@ -931,31 +956,25 @@
   function boot(data){
     DATA = data;
 
-    // scope selector — grouping "kinds" first, then the per-country land
-    // drill-down (countries ordered by total killed, descending)
-    var sel = document.getElementById("scopeSelect");
-    var kinds = document.createElement("optgroup");
-    kinds.label = "By kind";
-    [["__all__", "all animals"],
-     ["__terrestrial__", "terrestrial animals"],
-     ["__avian__", "avian animals"],
-     ["__aquatic__", "aquatic animals"]].forEach(function(k){
-      var o = document.createElement("option");
-      o.value = k[0]; o.textContent = k[1];
-      kinds.appendChild(o);
+    // scope kind toggles (all / terrestrial / avian / aquatic) — a visible
+    // segmented control; each sets the single active scope.
+    Object.keys(scopeKindBtns).forEach(function(k){
+      scopeKindBtns[k].addEventListener("click", function(){ applyScope(k); });
     });
-    sel.appendChild(kinds);
-    var byCountry = document.createElement("optgroup");
-    byCountry.label = "By country (terrestrial & avian)";
+    // country drill-down — a separate secondary control (terrestrial & avian
+    // only; there is no country-level aquatic data). Placeholder + countries
+    // ordered by total killed, descending; choosing one sets the scope, the
+    // placeholder returns to "everything".
+    var ph = document.createElement("option");
+    ph.value = ""; ph.textContent = "a country…";
+    countrySelectEl.appendChild(ph);
     DATA.countries.slice().sort(function(a,b){ return b.total - a.total; }).forEach(function(c){
       var o = document.createElement("option");
       o.value = c.name; o.textContent = c.name;
-      byCountry.appendChild(o);
+      countrySelectEl.appendChild(o);
     });
-    sel.appendChild(byCountry);
-    sel.addEventListener("change", function(){ applyScope(sel.value); });
-    document.getElementById("scopeReset").addEventListener("click", function(){
-      sel.value = "__all__"; applyScope("__all__");
+    countrySelectEl.addEventListener("change", function(){
+      applyScope(countrySelectEl.value || "__all__");
     });
 
     // subline scaffold + the time this page was opened
@@ -985,17 +1004,22 @@
     reflect(tO,opts.subOpened);
     tO.addEventListener("click", function(){ opts.subOpened=!opts.subOpened; reflect(tO,opts.subOpened); saveOpts(); setSublineMode(); tick(true); });
 
-    // sea estimate basis (Low | High) — governs sea figures only; land is
+    // sea estimate basis (Low | Mid | High) — governs sea figures only; land is
     // reported data and unaffected. Recompute the current scope live.
-    var seaLowBtn = document.getElementById("seaLow"),
-        seaHighBtn = document.getElementById("seaHigh");
+    var basisBtns = {
+      low:  document.getElementById("seaLow"),
+      mid:  document.getElementById("seaMid"),
+      high: document.getElementById("seaHigh")
+    };
     function reflectBasis(){
-      seaLowBtn.setAttribute("aria-checked", opts.seaHigh ? "false" : "true");
-      seaHighBtn.setAttribute("aria-checked", opts.seaHigh ? "true" : "false");
+      for(var b in basisBtns) basisBtns[b].setAttribute("aria-checked", opts.seaBasis === b ? "true" : "false");
     }
     reflectBasis();
-    seaLowBtn.addEventListener("click", function(){ if(opts.seaHigh){ opts.seaHigh=false; reflectBasis(); saveOpts(); applyScope(currentScope); } });
-    seaHighBtn.addEventListener("click", function(){ if(!opts.seaHigh){ opts.seaHigh=true; reflectBasis(); saveOpts(); applyScope(currentScope); } });
+    Object.keys(basisBtns).forEach(function(b){
+      basisBtns[b].addEventListener("click", function(){
+        if(opts.seaBasis !== b){ opts.seaBasis = b; reflectBasis(); saveOpts(); applyScope(currentScope); }
+      });
+    });
 
     // sentience tiers — opt-in layers above the always-present core
     var tierBiv = document.getElementById("tierBivalve"),
