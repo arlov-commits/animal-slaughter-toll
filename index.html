@@ -162,6 +162,16 @@
     opacity:1;visibility:visible;transform:none;
   }
 
+  /* per-card info button — top-right; tooltip opens leftward to stay in view */
+  .kpi-head .info-card{align-self:flex-start;margin-left:.5rem;flex:none}
+  .info-card .tip{left:auto;right:0;width:min(20rem,82vw)}
+  .info-card .tip::before{left:auto;right:.35rem}
+  .tip-rows{display:flex;flex-direction:column;gap:.32rem}
+  .tip-row{display:flex;align-items:baseline;justify-content:space-between;gap:1.2rem}
+  .tip-row-label{color:var(--muted);font-style:italic}
+  .tip-row-val{color:var(--ink);font-variant-numeric:tabular-nums;white-space:nowrap}
+  .tip-note{display:block;margin-top:.6rem;color:var(--faint);font-size:.82em;line-height:1.45}
+
   /* subline under the "since you opened" count */
   .subline{
     color:var(--muted);font-size:.92rem;margin:.5rem 0 0;
@@ -395,7 +405,7 @@
 <main>
   <div class="topbar">
     <p class="kicker">A live memorial</p>
-    <span class="version" id="version">v2.9</span>
+    <span class="version" id="version">v3.0</span>
   </div>
   <h1>Killed for food</h1>
 
@@ -549,9 +559,11 @@
   var countrySelectEl = document.getElementById("countrySelect");
   var swPre, swText, swPost, openedAtStr = "";
   var speciesCounters = []; // {el, perSecond}
+  var speciesAnnual = {};   // species id -> worldwide annual toll (for the rate tooltip)
 
   function paceRows(annual){
     var perMonth  = annual/12;
+    var perWeek   = annual*7/365.2425;
     var perDay    = annual/365.2425;
     var perHour   = perDay/24;
     var perMinute = perHour/60;
@@ -561,6 +573,7 @@
     return [
       ["Every year", commas(annual), ""],
       ["Every month", commas(perMonth), ""],
+      ["Every week", commas(perWeek), ""],
       ["Every day", commas(perDay), ""],
       ["Every hour", commas(perHour), ""],
       ["Every minute", commas(perMinute), ""],
@@ -600,6 +613,76 @@
     return list;
   }
 
+  /* ---------- per-species rate tooltip (temporary format comparison) ----------
+     Three roundings of one figure: a species' worldwide annual toll spread over
+     the seconds in a year. A static reference — independent of the Flowing/
+     Ticking mode and of the active scope. Built from a list of rows so more
+     per-species content can be added later without touching the renderer. No
+     rate is written as a literal; every value derives from data.json. */
+  var RATE_UNITS = [
+    ["sec", 1], ["minute", 60], ["hour", 3600],
+    ["day", 86400], ["week", 604800], ["year", SECONDS_PER_YEAR]
+  ];
+  // Smallest unit at which the rate reaches `threshold` (else the largest unit).
+  function scaledRate(annual, threshold){
+    var perSec = annual / SECONDS_PER_YEAR, last = RATE_UNITS.length - 1;
+    for(var i=0;i<RATE_UNITS.length;i++){
+      var v = perSec * RATE_UNITS[i][1];
+      if(v >= threshold || i === last) return { v:v, unit:RATE_UNITS[i][0] };
+    }
+  }
+  var fmtRate1 = new Intl.NumberFormat("en-US", { minimumFractionDigits:1, maximumFractionDigits:1 });
+  function rateWhole(annual){ var s = scaledRate(annual, 1);   return commas(Math.round(s.v)) + " / " + s.unit; }            // A
+  function rateTrunc(annual){ var s = scaledRate(annual, 0.1); return fmtRate1.format(Math.floor(s.v*10)/10) + " / " + s.unit; } // B
+  function rateRound(annual){ var s = scaledRate(annual, 0.1); return fmtRate1.format(Math.round(s.v*10)/10) + " / " + s.unit; } // C
+
+  // Extensible row list for a species tooltip — add per-species rows here later.
+  function speciesTipRows(annual){
+    return [
+      { label: "A (whole)", value: rateWhole(annual) },
+      { label: "B (trunc)", value: rateTrunc(annual) },
+      { label: "C (round)", value: rateRound(annual) }
+    ];
+  }
+  var SPECIES_TIP_NOTE = "Three roundings of the same worldwide rate — a temporary comparison.";
+
+  // Close any pinned tooltips, and wire one info button's tap/click-to-pin.
+  function closeAllInfos(){
+    var open = document.querySelectorAll('.info[aria-expanded="true"]');
+    for(var i=0;i<open.length;i++) open[i].setAttribute("aria-expanded","false");
+  }
+  function wireInfo(btn){
+    btn.addEventListener("click", function(e){
+      e.stopPropagation();   // never trigger the card's drill toggle
+      var isOpen = btn.getAttribute("aria-expanded") === "true";
+      closeAllInfos();
+      btn.setAttribute("aria-expanded", isOpen ? "false" : "true");
+    });
+  }
+  // Build a subtle card info button (ⓘ) whose tooltip lists the given rows.
+  function makeSpeciesInfo(rows, note){
+    var btn = document.createElement("button");
+    btn.type = "button"; btn.className = "info info-inline info-card";
+    btn.setAttribute("aria-expanded", "false");
+    btn.setAttribute("aria-label", "Rate details");
+    var mark = document.createElement("span");
+    mark.className = "info-mark"; mark.setAttribute("aria-hidden", "true"); mark.textContent = "i";
+    var tip = document.createElement("span");
+    tip.className = "tip"; tip.setAttribute("role", "tooltip");
+    var rowsWrap = document.createElement("span"); rowsWrap.className = "tip-rows";
+    rows.forEach(function(r){
+      var row = document.createElement("span"); row.className = "tip-row";
+      var l = document.createElement("span"); l.className = "tip-row-label"; l.textContent = r.label;
+      var v = document.createElement("span"); v.className = "tip-row-val"; v.textContent = r.value;
+      row.appendChild(l); row.appendChild(v); rowsWrap.appendChild(row);
+    });
+    tip.appendChild(rowsWrap);
+    if(note){ var nt = document.createElement("span"); nt.className = "tip-note"; nt.textContent = note; tip.appendChild(nt); }
+    btn.appendChild(mark); btn.appendChild(tip);
+    wireInfo(btn);
+    return btn;
+  }
+
   function renderSpecies(items){
     var ul = document.getElementById("speciesList");
     ul.textContent = "";
@@ -621,6 +704,10 @@
       var nm = document.createElement("span"); nm.textContent = s.name;
       name.appendChild(nm);
       head.appendChild(name);
+      // subtle ⓘ in the card's top-right: per-species rate (worldwide, static)
+      if(s.id && speciesAnnual.hasOwnProperty(s.id)){
+        head.appendChild(makeSpeciesInfo(speciesTipRows(speciesAnnual[s.id]), SPECIES_TIP_NOTE));
+      }
       li.appendChild(head);
 
       // the metric: killed so far this year (live, Flowing/Ticking)
@@ -955,6 +1042,8 @@
   /* ---------- boot ---------- */
   function boot(data){
     DATA = data;
+    // worldwide annual per species — the static basis for each card's rate tooltip
+    DATA.species.forEach(function(sp){ speciesAnnual[sp.id] = sp.count; });
 
     // scope kind toggles (all / terrestrial / avian / aquatic) — a visible
     // segmented control; each sets the single active scope.
@@ -1033,21 +1122,12 @@
     tierOth.addEventListener("click", function(){ opts.seaOther=!opts.seaOther; reflectTiers(); saveOpts(); applyScope(currentScope); });
 
     // methodology / control tooltips: tap to pin on touch, Escape or outside-
-    // click to close. Works for every .info button on the page.
-    var infos = document.querySelectorAll(".info");
-    function closeInfos(){ for(var i=0;i<infos.length;i++) infos[i].setAttribute("aria-expanded","false"); }
-    for(var ii=0; ii<infos.length; ii++){
-      (function(info){
-        info.addEventListener("click", function(e){
-          e.stopPropagation();
-          var open = info.getAttribute("aria-expanded")==="true";
-          closeInfos();
-          info.setAttribute("aria-expanded", open ? "false" : "true");
-        });
-      })(infos[ii]);
-    }
-    document.addEventListener("click", closeInfos);
-    document.addEventListener("keydown", function(e){ if(e.key==="Escape") closeInfos(); });
+    // click to close. Static buttons are wired here; per-card info buttons are
+    // wired in renderSpecies via the same helper.
+    var staticInfos = document.querySelectorAll(".info");
+    for(var ii=0; ii<staticInfos.length; ii++) wireInfo(staticInfos[ii]);
+    document.addEventListener("click", closeAllInfos);
+    document.addEventListener("keydown", function(e){ if(e.key==="Escape") closeAllInfos(); });
 
     // footer text
     var m = DATA.meta;
