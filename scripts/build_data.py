@@ -21,6 +21,11 @@ Method (kept deliberately conservative and reproducible):
   * A country's figure for a species is its value in that same reference
     year (absent = 0). Country figures therefore sum exactly to the world
     total.
+  * Aquatic animals (the "sea" block) come from a SEPARATE source,
+    config/sea_summary.csv (fishcount.org.uk estimate ranges, not FAO head
+    counts). They are carried alongside the land data but never merged into
+    world_total or the country breakdown. The subset row feed_fish
+    (counts_in_total=false) is carried for footnote use only — never summed.
 """
 import csv
 import json
@@ -32,6 +37,7 @@ from collections import defaultdict
 # works no matter the current working directory.
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SRC = os.path.join(ROOT, "data", "raw", "animals_killed_by_species_country_year.csv")
+SEA_SRC = os.path.join(ROOT, "config", "sea_summary.csv")
 OUT = os.path.join(ROOT, "data.json")
 CHINA_AGGREGATE = 351  # drop: equals mainland + HK + Macao + Taiwan
 TARGET_YEAR = 2023      # anchor year; 2024 is still treated as incomplete
@@ -65,6 +71,71 @@ def num(s):
         return float(s)
     except (TypeError, ValueError):
         return 0.0
+
+
+def truthy(s):
+    return str(s).strip().lower() == "true"
+
+
+def build_sea():
+    """Build the aquatic-animal block from config/sea_summary.csv.
+
+    These are fishcount.org.uk estimate RANGES (tonnage / mean weight), not FAO
+    head counts, so each category carries a low and a high. The block is kept
+    deliberately separate from the land data: it is never added to world_total
+    and never appears in the country drill-down.
+
+    The headline sea figure uses the LOW estimate. One row, feed_fish, is a
+    SUBSET of wild-caught fish (counts_in_total = FALSE); it is carried on its
+    own for footnote use and is never summed into the totals.
+    """
+    categories = []
+    feed_fish = None
+    with open(SEA_SRC, encoding="utf-8-sig") as f:
+        for r in csv.DictReader(f):
+            entry = {
+                "category": r["category"],
+                "group": r["group"],            # class group: fish / decapod / mollusc
+                "fishery": r["fishery"],
+                "sentience_tier": r["sentience_tier"],
+                "year": int(r["year"]),
+                "low": int(r["low"]),
+                "high": int(r["high"]),
+                "unit": r["unit"],
+                "is_subset": truthy(r["is_subset"]),
+                "counts_in_total": truthy(r["counts_in_total"]),
+                "source": r["source"],
+                "note": r["note"],
+            }
+            if entry["counts_in_total"]:
+                categories.append(entry)
+            else:
+                # The lone subset row (feed fish). Carried for footnote use
+                # only — kept out of `categories` so it can never be summed in.
+                feed_fish = entry
+
+    total_low = sum(c["low"] for c in categories)    # headline basis
+    total_high = sum(c["high"] for c in categories)
+
+    return {
+        "meta": {
+            "source": "fishcount.org.uk (A. Mood & P. Brooke)",
+            "method": "FAO capture & aquaculture production tonnage divided by "
+            "estimated mean weight per species — every figure is a RANGE, not a "
+            "head count (unlike the land/FAO data).",
+            "headline_basis": "low",
+            "unit": "individuals",
+            "note": "Aquatic animals killed for food, as estimate ranges. Kept "
+            "SEPARATE from the land data: not part of world_total and not in the "
+            "country breakdown. The headline uses the LOW estimate; high is "
+            "carried for range display. feed_fish is a SUBSET of wild-caught "
+            "fish (counts_in_total=false) — a footnote only, never added.",
+        },
+        "total_low": total_low,
+        "total_high": total_high,
+        "categories": categories,
+        "feed_fish": feed_fish,
+    }
 
 
 def main():
@@ -149,14 +220,22 @@ def main():
         "countries": countries_out,
     }
 
+    # Aquatic animals — a structurally separate block (see build_sea). Added
+    # last so the land keys above serialise byte-for-byte as before.
+    data["sea"] = build_sea()
+
     with open(OUT, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, separators=(",", ":"))
 
+    sea = data["sea"]
     print(f"Wrote {OUT}")
-    print(f"  world total : {round(world_total):,}")
+    print(f"  world total : {round(world_total):,}  (land; sea excluded)")
     print(f"  species     : {len(species_out)}")
     print(f"  countries   : {len(countries_out)}")
     print(f"  ref years   : {years_used}")
+    print(f"  sea cats    : {len(sea['categories'])} counted + feed_fish (subset, excluded)")
+    print(f"  sea low     : {sea['total_low']:,}  (headline basis)")
+    print(f"  sea high    : {sea['total_high']:,}")
 
 
 if __name__ == "__main__":
