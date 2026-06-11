@@ -65,6 +65,11 @@ DISPLAY = {
     "mules": "Mules",
 }
 
+# Birds in the FAO land data; every other land species is a (terrestrial)
+# mammal. Used by the site to split the land figures into avian / terrestrial
+# scopes — a taxonomy lives here in the data layer, never in the UI.
+AVIAN = {"chickens", "ducks", "geese", "turkeys", "pigeons_other_birds"}
+
 
 def num(s):
     try:
@@ -180,6 +185,7 @@ def main():
             "count": round(world[sp]),
             "year": ref_year[sp],
             "share": world[sp] / world_total,
+            "group": "avian" if sp in AVIAN else "terrestrial",
         }
         for sp in species
     ]

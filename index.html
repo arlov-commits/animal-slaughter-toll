@@ -380,14 +380,14 @@
 <main>
   <div class="topbar">
     <p class="kicker">A live memorial</p>
-    <span class="version" id="version">v2.6</span>
+    <span class="version" id="version">v2.7</span>
   </div>
   <h1>Killed for food</h1>
 
   <div class="scope">
     <label for="scopeSelect">Counting</label>
-    <select id="scopeSelect" aria-label="Choose region"></select>
-    <button class="reset" id="scopeReset" type="button">return to the world</button>
+    <select id="scopeSelect" aria-label="Choose what to count"></select>
+    <button class="reset" id="scopeReset" type="button">return to all animals</button>
   </div>
 
   <div class="hero" id="hero">
@@ -425,7 +425,7 @@
 
   <footer>
     <p id="srcLine"></p>
-    <p>These are <em>land</em> animals killed for food, counted as individuals. They do not include fish and other aquatic animals — by number the largest group of all, killed in the hundreds of billions to trillions — nor animals who die before slaughter, the day-old male chicks culled at hatcheries, or animals killed outside recorded food production. The true toll is higher than what is shown here.</p>
+    <p>These are animals killed for food, counted as individuals. Terrestrial and avian figures — mammals and birds — are FAOSTAT head counts; aquatic animals, by number the largest group of all, killed in the hundreds of billions to trillions, can now be counted with the control above, where the figures are <a href="https://fishcount.org.uk" rel="noopener">fishcount.org.uk</a> estimates rather than head counts. Not shown anywhere here: animals who die before slaughter, the day-old male chicks culled at hatcheries, or animals killed outside recorded food production. The true toll is higher than what is shown here.</p>
     <p>The pace assumes the year's killing is spread evenly across it; the live figures are a steady rate, not a live feed. The FAO "China" aggregate is excluded so its regions are not counted twice. <span id="breathNote"></span></p>
     <p class="basis-note" id="basisNote">Sum of reporting countries including FAO estimates, 2023. FAO's modeled global aggregate is somewhat higher (~100B+); we use the country-sum because every figure is individually verifiable.</p>
     <p class="fineprint" id="genLine"></p>
@@ -483,6 +483,7 @@
   var sublineEl = document.getElementById("subline");
   var leadTextEl = document.getElementById("leadText");
   var methodTipEl = document.getElementById("methodTip");
+  var spHeadEl = document.getElementById("spHead");
   var swPre, swText, swPost, openedAtStr = "";
   var speciesCounters = []; // {el, perSecond}
 
@@ -536,20 +537,21 @@
     return list;
   }
 
-  function renderSpecies(activeSpecies, total, isWorld){
+  function renderSpecies(items){
     var ul = document.getElementById("speciesList");
     ul.textContent = "";
     speciesCounters = [];
-    activeSpecies.forEach(function(s){
+    items.forEach(function(s){
+      var drillable = !!s.drillable;
       var li = document.createElement("li");
-      li.className = "sp" + (isWorld ? " drillable" : "");
+      li.className = "sp" + (drillable ? " drillable" : "");
 
-      // header — species name (with drill chevron in world scope)
+      // header — name (drill chevron only when the row drills to countries)
       var head = document.createElement("div");
       head.className = "kpi-head";
       var name = document.createElement("span");
       name.className = "kpi-name";
-      if(isWorld){
+      if(drillable){
         var tw = document.createElement("span"); tw.className="tw"; tw.textContent="›";
         name.appendChild(tw);
       }
@@ -583,7 +585,7 @@
       // live per-second tick: the big "so far this year" and "since opened"
       speciesCounters.push({ bigEl: big, openEl: v1, perSecond: s.count/SECONDS_PER_YEAR });
 
-      if(isWorld){
+      if(drillable){
         var drill = document.createElement("div");
         drill.className = "drill";
         var inner = document.createElement("div");
@@ -645,60 +647,137 @@
     }
   }
 
-  /* ---------- scope ---------- */
+  /* ---------- scope ----------
+     Every total here is computed from the loaded data at runtime — the land
+     species counts and the sea block — never written as a literal. Regenerating
+     data.json (or pointing at refreshed data) changes the site with no code
+     edits. */
+
+  // Land species split by the data-driven `group` field from build_data.py.
+  function speciesInGroup(group){
+    return DATA.species.filter(function(s){ return s.group === group; });
+  }
+
+  // Sea categories behind the default aquatic figure: those whose sentience
+  // tier has established evidence of sentience. We FILTER on that criterion
+  // (never a hardcoded category list or sum) and honour each row's
+  // counts_in_total flag, so the feed-fish subset can never be summed in.
+  var SENTIENT_AQUATIC = { finfish:true, decapod:true, cephalopod:true };
+  function aquaticDefaultCats(){
+    return ((DATA.sea && DATA.sea.categories) || []).filter(function(c){
+      return c.counts_in_total && SENTIENT_AQUATIC[c.sentience_tier];
+    });
+  }
+  function sumField(arr, f){
+    return arr.reduce(function(a, x){ return a + (x[f] || 0); }, 0);
+  }
+
+  function projectionSentence(total){
+    return "The annual figure (" + commas(total) + ") is spread evenly across " +
+      "the year — divided into a per-second rate (÷ " + commas(SECONDS_PER_YEAR) +
+      " seconds) and multiplied by the time elapsed since 1 January, 00:00 UTC. " +
+      "A projection, not a live feed.";
+  }
+  function landTip(total, label){
+    return "FAOSTAT's latest annual count of animals slaughtered for food, for " +
+      label + ", as individual head. " + projectionSentence(total);
+  }
+  function aquaticTip(total){
+    return "Aquatic figures are fishcount.org.uk estimates — production tonnage " +
+      "divided by estimated mean weight, so each is a range; this uses the lower " +
+      "bound. The default counts the groups with established evidence of " +
+      "sentience — finfish and decapod crustaceans — and leaves out bivalves, " +
+      "gastropods and other molluscs. " + projectionSentence(total);
+  }
+  function allTip(total, landTotal, seaTotal){
+    return "Everything combined: land animals from FAOSTAT (" + commas(landTotal) +
+      " a year, individual head) plus the fishcount aquatic estimate for the " +
+      "established-sentience groups (" + commas(seaTotal) + ", the lower bound of " +
+      "a range). " + projectionSentence(total);
+  }
+
   function applyScope(scopeName){
     var reset = document.getElementById("scopeReset");
     var note = document.getElementById("spScopeNote");
-    var active, total, isWorld, scopeLabel;
+    var items, total, lead, headLabel, basisVisible, tip;
 
-    if(scopeName === "__world__"){
-      active = DATA.species;
-      total = DATA.world_total;
-      isWorld = true;
-      reset.style.visibility = "hidden";
-      leadTextEl.textContent = "Killed so far this year";
+    if(scopeName === "__aquatic__"){
+      var cats = aquaticDefaultCats();
+      total = sumField(cats, "low");
+      items = cats.map(function(c){
+        return { name:c.category, count:c.low, year:c.year, drillable:false };
+      });
+      lead = "Killed so far this year";
+      headLabel = "By category";
+      note.textContent = "· aquatic animals";
+      basisVisible = false;
+      reset.style.visibility = "visible";
+      tip = aquaticTip(total);
+
+    } else if(scopeName === "__terrestrial__" || scopeName === "__avian__"){
+      var group = (scopeName === "__avian__") ? "avian" : "terrestrial";
+      var sp = speciesInGroup(group);
+      total = sumField(sp, "count");
+      items = sp.map(function(s){
+        return { id:s.id, name:s.name, count:s.count, year:s.year, drillable:true };
+      });
+      lead = "Killed so far this year";
+      headLabel = "By species";
+      note.textContent = "· " + group + " animals";
+      basisVisible = true;
+      reset.style.visibility = "visible";
+      tip = landTip(total, group + " animals");
+
+    } else if(scopeName === "__all__"){
+      var landTotal = sumField(DATA.species, "count");   // equals world_total
+      var seaCats = aquaticDefaultCats();
+      var seaTotal = sumField(seaCats, "low");
+      total = landTotal + seaTotal;
+      items = DATA.species.map(function(s){
+        return { id:s.id, name:s.name, count:s.count, year:s.year, drillable:true };
+      }).concat(seaCats.map(function(c){
+        return { name:c.category, count:c.low, year:c.year, drillable:false };
+      }));
+      items.sort(function(a, b){ return b.count - a.count; });
+      lead = "Killed so far this year";
+      headLabel = "By species & category";
       note.textContent = "";
-      scopeLabel = "the world";
+      basisVisible = true;
+      reset.style.visibility = "hidden";
+      tip = allTip(total, landTotal, seaTotal);
+
     } else {
+      // a single country — land only (there is no country-level aquatic data)
       var c = DATA.countries.find(function(x){ return x.name === scopeName; });
       var arr = [];
       DATA.species.forEach(function(s){
         var v = c.by_species[s.id];
-        if(v && v > 0) arr.push({ id:s.id, name:s.name, count:v, year:s.year });
+        if(v && v > 0) arr.push({ id:s.id, name:s.name, count:v, year:s.year, drillable:false });
       });
-      arr.sort(function(a,b){ return b.count-a.count; });
-      active = arr;
+      arr.sort(function(a, b){ return b.count - a.count; });
+      items = arr;
       total = c.total;
-      isWorld = false;
+      lead = "Killed so far this year in " + scopeName;
+      headLabel = "By species";
+      note.textContent = "· " + scopeName;
+      basisVisible = false;
       reset.style.visibility = "visible";
-      leadTextEl.textContent = "Killed so far this year in " + displayName(scopeName);
-      note.textContent = "· " + displayName(scopeName);
-      scopeLabel = displayName(scopeName);
+      tip = landTip(total, scopeName);
     }
 
-    // the provenance footnote describes the world country-sum; hide it when a
-    // single country is in scope (its figure is that country, not a sum).
-    document.getElementById("basisNote").hidden = !isWorld;
-
-    // methodology tooltip, reflecting the current scope
-    methodTipEl.textContent =
-      "A constant-rate projection, not a live feed. We take FAOSTAT's latest " +
-      "annual total for " + scopeLabel + " — " + commas(total) + " land animals " +
-      "a year — divide it into a per-second rate (÷ " + commas(SECONDS_PER_YEAR) +
-      " seconds in a year), and multiply by the time elapsed since 1 January, " +
-      "00:00 UTC. It assumes the year's toll is spread evenly across the year.";
+    // The land provenance endnote applies only where the figure rests on the
+    // FAOSTAT land country-sum (all / terrestrial / avian) — not for the
+    // aquatic estimates or a single country.
+    document.getElementById("basisNote").hidden = !basisVisible;
+    leadTextEl.textContent = lead;
+    if(spHeadEl && spHeadEl.firstChild){ spHeadEl.firstChild.nodeValue = headLabel + " "; }
+    methodTipEl.textContent = tip;
 
     perYear = total;
-    perSecond = total/SECONDS_PER_YEAR;
+    perSecond = total / SECONDS_PER_YEAR;
     renderPace(total);
-    renderSpecies(active, total, isWorld);
-    // immediate paint
-    tick(true);
-  }
-
-  function displayName(n){
-    // light touch-ups for the longest official names
-    return n;
+    renderSpecies(items);
+    tick(true);   // immediate paint
   }
 
   /* ---------- subline (the running stopwatch / opened-at reference) ---------- */
@@ -753,19 +832,31 @@
   function boot(data){
     DATA = data;
 
-    // scope selector — countries ordered by total killed, descending
+    // scope selector — grouping "kinds" first, then the per-country land
+    // drill-down (countries ordered by total killed, descending)
     var sel = document.getElementById("scopeSelect");
-    var optW = document.createElement("option");
-    optW.value = "__world__"; optW.textContent = "the whole world";
-    sel.appendChild(optW);
+    var kinds = document.createElement("optgroup");
+    kinds.label = "By kind";
+    [["__all__", "all animals"],
+     ["__terrestrial__", "terrestrial animals"],
+     ["__avian__", "avian animals"],
+     ["__aquatic__", "aquatic animals"]].forEach(function(k){
+      var o = document.createElement("option");
+      o.value = k[0]; o.textContent = k[1];
+      kinds.appendChild(o);
+    });
+    sel.appendChild(kinds);
+    var byCountry = document.createElement("optgroup");
+    byCountry.label = "By country (terrestrial & avian)";
     DATA.countries.slice().sort(function(a,b){ return b.total - a.total; }).forEach(function(c){
       var o = document.createElement("option");
       o.value = c.name; o.textContent = c.name;
-      sel.appendChild(o);
+      byCountry.appendChild(o);
     });
+    sel.appendChild(byCountry);
     sel.addEventListener("change", function(){ applyScope(sel.value); });
     document.getElementById("scopeReset").addEventListener("click", function(){
-      sel.value = "__world__"; applyScope("__world__");
+      sel.value = "__all__"; applyScope("__all__");
     });
 
     // subline scaffold + the time this page was opened
@@ -818,7 +909,7 @@
       "“Per breath” uses a placeholder of " + m.breaths_per_minute + " breaths per minute.";
     document.getElementById("genLine").textContent = "Data compiled " + m.generated + ".";
 
-    applyScope("__world__");
+    applyScope("__all__");
     // Always drive from requestAnimationFrame. Flowing updates every frame;
     // Ticking is achieved by flooring the elapsed time, not by a slower timer.
     requestAnimationFrame(loop);
