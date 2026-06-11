@@ -167,6 +167,7 @@
   .info-card .tip{left:auto;right:0;width:min(20rem,82vw)}
   .info-card .tip::before{left:auto;right:.35rem}
   .tip-rows{display:flex;flex-direction:column;gap:.32rem}
+  .tip-rate{color:var(--ink);font-variant-numeric:tabular-nums;font-size:1.04em;letter-spacing:.01em}
   .tip-row{display:flex;align-items:baseline;justify-content:space-between;gap:1.2rem}
   .tip-row-label{color:var(--muted);font-style:italic}
   .tip-row-val{color:var(--ink);font-variant-numeric:tabular-nums;white-space:nowrap}
@@ -405,7 +406,7 @@
 <main>
   <div class="topbar">
     <p class="kicker">A live memorial</p>
-    <span class="version" id="version">v3.0</span>
+    <span class="version" id="version">v3.1</span>
   </div>
   <h1>Killed for food</h1>
 
@@ -613,38 +614,48 @@
     return list;
   }
 
-  /* ---------- per-species rate tooltip (temporary format comparison) ----------
-     Three roundings of one figure: a species' worldwide annual toll spread over
-     the seconds in a year. A static reference — independent of the Flowing/
-     Ticking mode and of the active scope. Built from a list of rows so more
-     per-species content can be added later without touching the renderer. No
-     rate is written as a literal; every value derives from data.json. */
+  /* ---------- per-item rate tooltip ----------
+     ONE dynamic format applied uniformly to every species and aquatic category.
+     It operates on the computed per-second rate, so regroupings or data refreshes
+     recalculate automatically — no per-item special-casing, no rate literal. Land
+     species use their worldwide annual (static); aquatic categories use the value
+     at the selected Low/Mid/High basis, so the tooltip tracks that toggle. Built
+     from a row list + note so more per-item content can be added later. */
   var RATE_UNITS = [
     ["sec", 1], ["minute", 60], ["hour", 3600],
     ["day", 86400], ["week", 604800], ["year", SECONDS_PER_YEAR]
   ];
-  // Smallest unit at which the rate reaches `threshold` (else the largest unit).
-  function scaledRate(annual, threshold){
-    var perSec = annual / SECONDS_PER_YEAR, last = RATE_UNITS.length - 1;
-    for(var i=0;i<RATE_UNITS.length;i++){
-      var v = perSec * RATE_UNITS[i][1];
-      if(v >= threshold || i === last) return { v:v, unit:RATE_UNITS[i][0] };
+  var fmtRate1 = new Intl.NumberFormat("en-US", { minimumFractionDigits:1, maximumFractionDigits:1 });
+  function floor1(x){ return Math.floor(x * 10) / 10; }   // floor to one decimal
+
+  // Finalized rate format. rate = annual / seconds-per-year, then by bracket:
+  //   >= 1000/sec       floor to whole          "n / sec"
+  //   20 to <1000/sec   floor to whole, but round UP when the fraction >= 0.89
+  //   1 to <20/sec      floor to one decimal    "n / sec"
+  //   < 1/sec           per-minute floored to one decimal "n / minute"; if that
+  //                     is still < 1, scale up hour->day->week->year until >= 1.
+  function formatRate(annual){
+    var r = annual / SECONDS_PER_YEAR;
+    if(r >= 1000) return commas(Math.floor(r)) + " / sec";
+    if(r >= 20){
+      var n = (r - Math.floor(r) >= 0.89) ? Math.ceil(r) : Math.floor(r);
+      return commas(n) + " / sec";
+    }
+    if(r >= 1) return fmtRate1.format(floor1(r)) + " / sec";
+    for(var i = 1; i < RATE_UNITS.length; i++){
+      var v = r * RATE_UNITS[i][1];
+      if(v >= 1 || i === RATE_UNITS.length - 1) return fmtRate1.format(floor1(v)) + " / " + RATE_UNITS[i][0];
     }
   }
-  var fmtRate1 = new Intl.NumberFormat("en-US", { minimumFractionDigits:1, maximumFractionDigits:1 });
-  function rateWhole(annual){ var s = scaledRate(annual, 1);   return commas(Math.round(s.v)) + " / " + s.unit; }            // A
-  function rateTrunc(annual){ var s = scaledRate(annual, 0.1); return fmtRate1.format(Math.floor(s.v*10)/10) + " / " + s.unit; } // B
-  function rateRound(annual){ var s = scaledRate(annual, 0.1); return fmtRate1.format(Math.round(s.v*10)/10) + " / " + s.unit; } // C
 
-  // Extensible row list for a species tooltip — add per-species rows here later.
-  function speciesTipRows(annual){
-    return [
-      { label: "A (whole)", value: rateWhole(annual) },
-      { label: "B (trunc)", value: rateTrunc(annual) },
-      { label: "C (round)", value: rateRound(annual) }
-    ];
+  var LAND_RATE_NOTE = "Worldwide, spread evenly across the year — not a live count.";
+  function basisLabel(){ return opts.seaBasis === "high" ? "High" : (opts.seaBasis === "mid" ? "Mid" : "Low"); }
+  function aquaticRateNote(){
+    return "A fishcount estimate, not a head count — derived from FAO production " +
+      "tonnages divided by estimated mean weights, so it spans a wide low–high " +
+      "range. This rate uses the selected " + basisLabel() + " bound and is spread " +
+      "evenly across the year; it is not a precise count.";
   }
-  var SPECIES_TIP_NOTE = "Three roundings of the same worldwide rate — a temporary comparison.";
 
   // Close any pinned tooltips, and wire one info button's tap/click-to-pin.
   function closeAllInfos(){
@@ -659,22 +670,28 @@
       btn.setAttribute("aria-expanded", isOpen ? "false" : "true");
     });
   }
-  // Build a subtle card info button (ⓘ) whose tooltip lists the given rows.
+  // Build a subtle card info button (ⓘ). `rows` is a list of { value } (a
+  // prominent line) or { label, value } (a pair); `note` is a caption below.
   function makeSpeciesInfo(rows, note){
     var btn = document.createElement("button");
     btn.type = "button"; btn.className = "info info-inline info-card";
     btn.setAttribute("aria-expanded", "false");
-    btn.setAttribute("aria-label", "Rate details");
+    btn.setAttribute("aria-label", "Rate");
     var mark = document.createElement("span");
     mark.className = "info-mark"; mark.setAttribute("aria-hidden", "true"); mark.textContent = "i";
     var tip = document.createElement("span");
     tip.className = "tip"; tip.setAttribute("role", "tooltip");
     var rowsWrap = document.createElement("span"); rowsWrap.className = "tip-rows";
     rows.forEach(function(r){
-      var row = document.createElement("span"); row.className = "tip-row";
-      var l = document.createElement("span"); l.className = "tip-row-label"; l.textContent = r.label;
-      var v = document.createElement("span"); v.className = "tip-row-val"; v.textContent = r.value;
-      row.appendChild(l); row.appendChild(v); rowsWrap.appendChild(row);
+      if(r.label){
+        var row = document.createElement("span"); row.className = "tip-row";
+        var l = document.createElement("span"); l.className = "tip-row-label"; l.textContent = r.label;
+        var v = document.createElement("span"); v.className = "tip-row-val"; v.textContent = r.value;
+        row.appendChild(l); row.appendChild(v); rowsWrap.appendChild(row);
+      } else {
+        var solo = document.createElement("span"); solo.className = "tip-rate"; solo.textContent = r.value;
+        rowsWrap.appendChild(solo);
+      }
     });
     tip.appendChild(rowsWrap);
     if(note){ var nt = document.createElement("span"); nt.className = "tip-note"; nt.textContent = note; tip.appendChild(nt); }
@@ -704,9 +721,13 @@
       var nm = document.createElement("span"); nm.textContent = s.name;
       name.appendChild(nm);
       head.appendChild(name);
-      // subtle ⓘ in the card's top-right: per-species rate (worldwide, static)
+      // subtle ⓘ in the card's top-right — one finalized rate per item
       if(s.id && speciesAnnual.hasOwnProperty(s.id)){
-        head.appendChild(makeSpeciesInfo(speciesTipRows(speciesAnnual[s.id]), SPECIES_TIP_NOTE));
+        // land species: static worldwide rate
+        head.appendChild(makeSpeciesInfo([{ value: formatRate(speciesAnnual[s.id]) }], LAND_RATE_NOTE));
+      } else if(s.sea){
+        // aquatic category: rate at the selected Low/Mid/High basis
+        head.appendChild(makeSpeciesInfo([{ value: formatRate(s.count) }], aquaticRateNote()));
       }
       li.appendChild(head);
 
@@ -898,7 +919,7 @@
       total = seaValue(cats);
       seaRange = [ sumField(cats, "low"), sumField(cats, "high") ];
       items = cats.map(function(c){
-        return { name:c.category, count:catValue(c), year:c.year, drillable:false };
+        return { name:c.category, count:catValue(c), year:c.year, drillable:false, sea:true };
       });
       lead = "Killed so far this year";
       headLabel = "By category";
@@ -929,7 +950,7 @@
       items = DATA.species.map(function(s){
         return { id:s.id, name:s.name, count:s.count, year:s.year, drillable:true };
       }).concat(seaCats.map(function(c){
-        return { name:c.category, count:catValue(c), year:c.year, drillable:false };
+        return { name:c.category, count:catValue(c), year:c.year, drillable:false, sea:true };
       }));
       items.sort(function(a, b){ return b.count - a.count; });
       lead = "Killed so far this year";
