@@ -162,10 +162,12 @@
     opacity:1;visibility:visible;transform:none;
   }
 
-  /* per-card info button — top-right; tooltip opens leftward to stay in view */
+  /* per-card info button — top-right. Its tooltip is positioned in JS
+     (placeCardTip): context-menu style, opening into whichever space is clear
+     of the card's real content, so it never covers the name, numbers or image. */
   .kpi-head .info-card{align-self:flex-start;margin-left:.5rem;flex:none}
-  .info-card .tip{left:auto;right:0;width:min(20rem,82vw)}
-  .info-card .tip::before{left:auto;right:.35rem}
+  .info-card .tip{width:min(20rem,82vw)}
+  .info-card .tip::before{display:none}
   .tip-rows{display:flex;flex-direction:column;gap:.32rem}
   .tip-rate{color:var(--ink);font-variant-numeric:tabular-nums;font-size:1.04em;letter-spacing:.01em}
   .tip-row{display:flex;align-items:baseline;justify-content:space-between;gap:1.2rem}
@@ -406,7 +408,7 @@
 <main>
   <div class="topbar">
     <p class="kicker">A live memorial</p>
-    <span class="version" id="version">v3.1</span>
+    <span class="version" id="version">v3.2</span>
   </div>
   <h1>Killed for food</h1>
 
@@ -648,7 +650,7 @@
     }
   }
 
-  var LAND_RATE_NOTE = "Worldwide, spread evenly across the year — not a live count.";
+  var LAND_RATE_NOTE = "Worldwide, spread evenly across the year (avg)";
   function basisLabel(){ return opts.seaBasis === "high" ? "High" : (opts.seaBasis === "mid" ? "Mid" : "Low"); }
   function aquaticRateNote(){
     return "A fishcount estimate, not a head count — derived from FAO production " +
@@ -668,7 +670,93 @@
       var isOpen = btn.getAttribute("aria-expanded") === "true";
       closeAllInfos();
       btn.setAttribute("aria-expanded", isOpen ? "false" : "true");
+      // pinning a card tip on tap: position it before it shows (no jolt)
+      if(!isOpen && btn.classList.contains("info-card")) placeCardTip(btn);
     });
+  }
+
+  /* ---------- dynamic placement for the per-card rate tooltip ----------
+     The ⓘ sits in the card's top-right and its tooltip is about as wide as the
+     card, so it can only stay clear of the content by opening fully above or
+     below it — like a right-click context menu that opens whichever way has
+     room. Placement is measured from the card's REAL laid-out content (name,
+     numbers, and any future species image), never hardcoded offsets, so it
+     keeps clearing the content automatically as the card gains new content. */
+
+  // Union of the card's real content boxes — every child except the ⓘ button
+  // (with its tip) and the collapsed drill. Anything added later (e.g. an
+  // image) is a child too, so it is included automatically.
+  function cardContentRect(card){
+    var box = null, kids = card.children;
+    for(var i=0;i<kids.length;i++){
+      var el = kids[i];
+      if(el.classList.contains("drill")) continue;   // collapsed breakdown — not content here
+      var r = el.getBoundingClientRect();
+      if(r.width===0 && r.height===0) continue;
+      if(!box){ box = {top:r.top, left:r.left, right:r.right, bottom:r.bottom}; }
+      else {
+        if(r.top<box.top) box.top=r.top;       if(r.left<box.left) box.left=r.left;
+        if(r.right>box.right) box.right=r.right; if(r.bottom>box.bottom) box.bottom=r.bottom;
+      }
+    }
+    if(!box){ var c = card.getBoundingClientRect();
+      box = {top:c.top, left:c.left, right:c.right, bottom:c.bottom}; }
+    return box;
+  }
+
+  // Position one card's tooltip relative to its ⓘ (the tip's offset parent).
+  // Coordinates are worked out in viewport space, then converted to the
+  // button's local space — correct under any ancestor transform, and the tip
+  // scrolls with the card.
+  function placeCardTip(btn){
+    var tip = btn.querySelector(".tip");
+    var card = btn.closest(".sp");
+    if(!tip || !card) return;
+    var GAP = 8, EDGE = 8;   // clearance from content, and from the viewport edge
+    var vw = document.documentElement.clientWidth;
+    var vh = document.documentElement.clientHeight;
+    var content = cardContentRect(card);
+    var anchor = btn.getBoundingClientRect();
+    var tw = tip.offsetWidth, th = tip.offsetHeight;
+
+    // vertical: prefer above the content, flip below when there is no room;
+    // if neither side fully fits, take the roomier one (clamped, never clipped)
+    var fitsAbove = th <= (content.top - GAP - EDGE);
+    var fitsBelow = th <= (vh - EDGE - (content.bottom + GAP));
+    var vpTop;
+    if(fitsAbove) vpTop = content.top - GAP - th;
+    else if(fitsBelow) vpTop = content.bottom + GAP;
+    else if((content.top - EDGE) >= (vh - content.bottom - EDGE)) vpTop = content.top - GAP - th;
+    else vpTop = content.bottom + GAP;
+    vpTop = Math.max(EDGE, Math.min(vpTop, vh - EDGE - th));
+
+    // horizontal: right-align to the ⓘ, then clamp within the viewport
+    var vpLeft = anchor.right - tw;
+    vpLeft = Math.max(EDGE, Math.min(vpLeft, vw - EDGE - tw));
+
+    tip.style.position = "absolute";
+    tip.style.left = (vpLeft - anchor.left) + "px";
+    tip.style.top  = (vpTop  - anchor.top)  + "px";
+    tip.style.right = "auto";
+    tip.style.bottom = "auto";
+  }
+
+  // Reposition any card tip that is currently shown (pinned / hovered /
+  // focused) — used on scroll and resize so it stays clear and on-screen.
+  function cardTipShown(btn){
+    if(btn.getAttribute("aria-expanded")==="true") return true;
+    try{ return btn.matches(":hover") || btn.matches(":focus-within"); }catch(e){ return false; }
+  }
+  var repoQueued = false;
+  function repositionCardTips(){
+    repoQueued = false;
+    var btns = document.querySelectorAll(".info-card");
+    for(var i=0;i<btns.length;i++) if(cardTipShown(btns[i])) placeCardTip(btns[i]);
+  }
+  function onViewportChange(){
+    if(repoQueued) return;
+    repoQueued = true;
+    requestAnimationFrame(repositionCardTips);
   }
   // Build a subtle card info button (ⓘ). `rows` is a list of { value } (a
   // prominent line) or { label, value } (a pair); `note` is a caption below.
@@ -697,6 +785,9 @@
     if(note){ var nt = document.createElement("span"); nt.className = "tip-note"; nt.textContent = note; tip.appendChild(nt); }
     btn.appendChild(mark); btn.appendChild(tip);
     wireInfo(btn);
+    // position into clear space whenever the tip is about to show (no jolt)
+    btn.addEventListener("mouseenter", function(){ placeCardTip(btn); });
+    btn.addEventListener("focus", function(){ placeCardTip(btn); });
     return btn;
   }
 
@@ -1149,6 +1240,9 @@
     for(var ii=0; ii<staticInfos.length; ii++) wireInfo(staticInfos[ii]);
     document.addEventListener("click", closeAllInfos);
     document.addEventListener("keydown", function(e){ if(e.key==="Escape") closeAllInfos(); });
+    // keep an open card tooltip clear of content and on-screen as things move
+    window.addEventListener("scroll", onViewportChange, true);
+    window.addEventListener("resize", onViewportChange);
 
     // footer text
     var m = DATA.meta;
