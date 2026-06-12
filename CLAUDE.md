@@ -11,6 +11,15 @@ whole site (markup + CSS + JS in one file) and at runtime it `fetch`es one
 file, `data.json`, also in the root. There is no server and no build step on
 the serving path — what is committed in root is what ships.
 
+The site is also an **installable, offline-capable PWA**. `manifest.webmanifest`
+makes it installable; `sw.js` (a service worker, registered from `index.html`)
+pre-caches the shell — `index.html`, `data.json`, the manifest and icons — and
+serves it offline. The page and `data.json` are **network-first** (fresh when
+online, cached copy when offline). Each launch is a **fresh navigation** that
+reruns the inline script, so the *"since you opened this page"* counter still
+resets on every reopen, online or off — keep it that way (don't persist the
+open time).
+
 The data pipeline is:
 
 ```
@@ -37,6 +46,12 @@ For **every** change to this project, without being asked again:
    version in the commit must match.
 3. **Commit and push to `main`.**
 
+When the change touches anything the service worker caches (the page, styles,
+JS, `data.json`, or the icons), also bump the **`VERSION`** constant in `sw.js`
+to the same `vMAJOR.MINOR`, so installed/offline clients purge the old cache and
+pick up the new shell. (Online visits already refresh the cached page and data,
+but keeping `VERSION` in step is the guarantee for offline clients.)
+
 Versioning started at **v1.0**.
 
 ## Repo layout
@@ -45,7 +60,10 @@ Versioning started at **v1.0**.
 animal-slaughter-toll/
 ├── index.html            # the whole site (markup + CSS + JS)
 ├── data.json             # generated; fetched by index.html at runtime
+├── manifest.webmanifest  # PWA manifest — makes the site installable
+├── sw.js                 # service worker — offline pre-cache of the shell
 ├── favicon.svg, favicon-32.png, apple-touch-icon.png
+├── icon-192.png, icon-512.png, icon-maskable-512.png   # PWA icons (from favicon.svg)
 ├── .nojekyll             # tells Pages to serve files verbatim
 ├── CLAUDE.md, README.md
 ├── SEA_METHODOLOGY.md    # sea-data sources, framing, guardrails (see below)
@@ -62,8 +80,9 @@ animal-slaughter-toll/
         └── reference/    # 13 FAO code-lookup tables (provenance only, unused by code)
 ```
 
-Keep `index.html`, `data.json`, the favicons, and `.nojekyll` in **root** —
-that is what Pages serves.
+Keep `index.html`, `data.json`, `manifest.webmanifest`, `sw.js`, the favicons,
+the PWA icons, and `.nojekyll` in **root** — that is what Pages serves. The
+service worker's scope is its own directory, so it must stay in root too.
 
 ## Land data: counting traps that must never regress
 

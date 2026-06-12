@@ -9,6 +9,12 @@
 <link rel="icon" type="image/svg+xml" href="favicon.svg">
 <link rel="alternate icon" type="image/png" sizes="32x32" href="favicon-32.png">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#0a0a0b">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<meta name="apple-mobile-web-app-title" content="Killed for food">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,500;1,400&display=swap" rel="stylesheet">
@@ -408,7 +414,7 @@
 <main>
   <div class="topbar">
     <p class="kicker">A live memorial</p>
-    <span class="version" id="version">v3.2</span>
+    <span class="version" id="version">v3.3</span>
   </div>
   <h1>Killed for food</h1>
 
@@ -1280,6 +1286,16 @@
       }
     })
     .catch(function(e){ fail("The count could not be loaded."); console.error(e); });
+
+  // Offline / installable: register the service worker. A relative path keeps
+  // the scope correct whether the site is served from a domain root or a Pages
+  // subpath. Each launch is a fresh navigation, so "since you opened this page"
+  // still resets every time the app is reopened, online or off.
+  if("serviceWorker" in navigator){
+    window.addEventListener("load", function(){
+      navigator.serviceWorker.register("sw.js").catch(function(){});
+    });
+  }
 })();
 </script>
 </body>
