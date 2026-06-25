@@ -1,31 +1,35 @@
 #!/usr/bin/env python3
-"""Build data.json for the slaughter clock from FAOSTAT data.
+"""Build data.json for the slaughter clock.
 
-Source: data/raw/animals_killed_by_species_country_year.csv (FAOSTAT,
-"Producing Animals/Slaughtered" element). Each row is animals slaughtered for
-food of a given species, in a country, in a year.
+Two FAOSTAT-derived land sources, plus a separate aquatic block:
 
-Run from anywhere: `python3 scripts/build_data.py`. Paths are resolved
-relative to this file, so the CSV is read from data/raw/ and data.json is
-written to the repo root (where index.html fetches it).
+  * WORLD / by-kind figures  ->  data/raw/world-data-six-year.csv
+      15 species, one "slaughtered animals" head count per species per year
+      2018..2024 (already de-duplicated of co-products and unit-corrected
+      upstream — see CLAUDE.md "counting traps"). A final TOTAL row is NOT a
+      species; we use it only to CHECK that the 15 sum to it per year.
+      The site shows a chosen anchor year (2018..2024) or, by default, the
+      plain arithmetic mean of 2022, 2023 and 2024 — computed HERE per species
+      as (v2022+v2023+v2024)/3. The file's own "Three-year avg" / growth columns
+      are deliberately ignored.
 
-Method (kept deliberately conservative and reproducible):
+  * COUNTRY drill-down  ->  data/raw/animals_killed_by_species_country_year.csv
+      Per-country head counts (FAOSTAT), anchored to 2023. We DROP the FAO
+      "China" aggregate (351) and re-shape the per-country species onto the
+      SAME 15-species taxonomy as the world file:
+        - game and mammals_other are dropped from every country;
+        - camels + other camelids merge into one "Camel (All Camelids)" row;
+        - asses + mules merge into one "Donkeys & mules" row;
+        - every other species is one-to-one.
+      Per-country VALUES are otherwise unchanged — rows are only summed or
+      removed. Any country-species label not in COUNTRY_TO_WORLD aborts the
+      build, so a new or renamed label can never be silently lost or mis-bucketed.
 
-  * The FAO area "China" (code 351) is an aggregate of China mainland,
-    Hong Kong, Macao and Taiwan, all of which are also present as their own
-    rows. We DROP code 351 so nothing is counted twice.
-  * We anchor every series to 2023, the latest complete year. (FAO's 2024
-    figures are still being revised and are treated as incomplete.) The two
-    negligible "game" / "other mammals" series stop in 2017, so they fall
-    back to their own most recent year.
-  * A country's figure for a species is its value in that same reference
-    year (absent = 0). Country figures therefore sum exactly to the world
-    total.
-  * Aquatic animals (the "sea" block) come from a SEPARATE source,
-    config/sea_summary.csv (fishcount.org.uk estimate ranges, not FAO head
-    counts). They are carried alongside the land data but never merged into
-    world_total or the country breakdown. The subset row feed_fish
-    (counts_in_total=false) is carried for footnote use only — never summed.
+  * AQUATIC ("sea") block  ->  config/sea_summary.csv  (unchanged; a separate
+      fishcount.org.uk estimate range, never merged into the land figures).
+
+Run from anywhere: `python3 scripts/build_data.py`. Paths resolve relative to
+this file, so data.json is written to the repo root where index.html fetches it.
 """
 import csv
 import json
@@ -36,39 +40,64 @@ from collections import defaultdict
 # Resolve paths relative to this script (scripts/ -> repo root), so the build
 # works no matter the current working directory.
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-SRC = os.path.join(ROOT, "data", "raw", "animals_killed_by_species_country_year.csv")
+WORLD_SRC = os.path.join(ROOT, "data", "raw", "world-data-six-year.csv")
+COUNTRY_SRC = os.path.join(ROOT, "data", "raw", "animals_killed_by_species_country_year.csv")
 SEA_SRC = os.path.join(ROOT, "config", "sea_summary.csv")
 OUT = os.path.join(ROOT, "data.json")
-CHINA_AGGREGATE = 351  # drop: equals mainland + HK + Macao + Taiwan
-TARGET_YEAR = 2023      # anchor year; 2024 is still treated as incomplete
 
-# Plain-language names; FAO uses terse / mixed singular labels.
-DISPLAY = {
-    "chickens": "Chickens",
-    "ducks": "Ducks",
-    "pig": "Pigs",
-    "geese": "Geese",
-    "sheep": "Sheep",
-    "rabbits_hares": "Rabbits & hares",
-    "goat": "Goats",
-    "turkeys": "Turkeys",
-    "cattle": "Cattle",
-    "rodents_other": "Other rodents",
-    "pigeons_other_birds": "Pigeons & other birds",
-    "buffalo": "Buffalo",
-    "horse": "Horses",
-    "camels": "Camels",
-    "camelids_other": "Other camelids",
-    "asses": "Donkeys",
-    "game": "Game",
-    "mammals_other": "Other mammals",
-    "mules": "Mules",
+CHINA_AGGREGATE = 351            # drop: equals mainland + HK + Macao + Taiwan
+COUNTRY_YEAR = 2023              # the country drill-down is anchored here
+WORLD_YEARS = [2018, 2019, 2020, 2021, 2022, 2023, 2024]
+AVG_YEARS = [2022, 2023, 2024]   # the default basis = plain mean of these
+
+# The 15 world species, in the world CSV's row order. Each maps the CSV "animal"
+# label to a stable id, a display name and a land taxonomy group: avian (birds)
+# vs terrestrial (the mammals). Display names keep the site's established forms;
+# the two pre-grouped rows adopt the file's names verbatim.
+#       csv_label,             id,                    display,                 group
+WORLD_SPECIES = [
+    ("Chicken",              "chickens",            "Chickens",              "avian"),
+    ("Duck",                 "ducks",               "Ducks",                 "avian"),
+    ("Pig",                  "pig",                 "Pigs",                  "terrestrial"),
+    ("Goose",                "geese",               "Geese",                 "avian"),
+    ("Sheep",                "sheep",               "Sheep",                 "terrestrial"),
+    ("Rabbit/Hare",          "rabbits_hares",       "Rabbits & hares",       "terrestrial"),
+    ("Goat",                 "goat",                "Goats",                 "terrestrial"),
+    ("Turkey",               "turkeys",             "Turkeys",               "avian"),
+    ("Cattle",               "cattle",              "Cattle",                "terrestrial"),
+    ("Domestic Rodent",      "rodents_other",       "Other rodents",         "terrestrial"),
+    ("Pigeon/Other Bird",    "pigeons_other_birds", "Pigeons & other birds", "avian"),
+    ("Buffalo",              "buffalo",             "Buffalo",               "terrestrial"),
+    ("Horse",                "horse",               "Horses",                "terrestrial"),
+    ("Camel (All Camelids)", "camelids",            "Camel (All Camelids)",  "terrestrial"),
+    ("Donkeys & mules",      "donkeys_mules",       "Donkeys & mules",       "terrestrial"),
+]
+
+# Re-shape the per-country FAO species labels onto the 15 world ids. None = drop
+# the species from every country. The two merges sum their component rows per
+# country; everything else is one-to-one. EVERY distinct label in the country
+# CSV must appear here, or the build aborts.
+COUNTRY_TO_WORLD = {
+    "chickens":            "chickens",
+    "ducks":               "ducks",
+    "pig":                 "pig",
+    "geese":               "geese",
+    "sheep":               "sheep",
+    "rabbits_hares":       "rabbits_hares",
+    "goat":                "goat",
+    "turkeys":             "turkeys",
+    "cattle":              "cattle",
+    "rodents_other":       "rodents_other",
+    "pigeons_other_birds": "pigeons_other_birds",
+    "buffalo":             "buffalo",
+    "horse":               "horse",
+    "camels":              "camelids",       # merge -> Camel (All Camelids)
+    "camelids_other":      "camelids",       # merge -> Camel (All Camelids)
+    "asses":               "donkeys_mules",  # merge -> Donkeys & mules
+    "mules":               "donkeys_mules",  # merge -> Donkeys & mules
+    "game":                None,             # drop
+    "mammals_other":       None,             # drop
 }
-
-# Birds in the FAO land data; every other land species is a (terrestrial)
-# mammal. Used by the site to split the land figures into avian / terrestrial
-# scopes — a taxonomy lives here in the data layer, never in the UI.
-AVIAN = {"chickens", "ducks", "geese", "turkeys", "pigeons_other_birds"}
 
 
 def num(s):
@@ -82,12 +111,150 @@ def truthy(s):
     return str(s).strip().lower() == "true"
 
 
+def parse_world_value(s):
+    """A world-CSV cell -> int head count.
+
+    Cells arrive with surrounding spaces/quotes and comma thousands separators
+    (e.g. ' 72,329,757,000 '); the csv module strips the quotes, we strip the
+    rest. Empty -> None.
+    """
+    s = (s or "").strip().strip('"').strip().replace(",", "")
+    if not s:
+        return None
+    return int(round(float(s)))
+
+
+def load_world():
+    """Read world-data-six-year.csv -> ({label: {year: int}}, total_row).
+
+    Columns are matched by name after stripping the header's stray spaces; the
+    avg/growth columns are never read. The TOTAL row is returned separately for
+    the per-year sum check, never as a species.
+    """
+    with open(WORLD_SRC, encoding="utf-8-sig", newline="") as f:
+        reader = csv.reader(f)
+        header = [h.strip() for h in next(reader)]
+        try:
+            animal_idx = header.index("animal")
+        except ValueError:
+            raise SystemExit("world CSV: no 'animal' column")
+        col = {}
+        for y in WORLD_YEARS:
+            key = "value_%d" % y
+            if key not in header:
+                raise SystemExit("world CSV: missing column %r" % key)
+            col[y] = header.index(key)
+
+        by_label, total_row = {}, None
+        for raw in reader:
+            if not raw or animal_idx >= len(raw):
+                continue
+            label = raw[animal_idx].strip()
+            if not label:
+                continue
+            vals = {y: parse_world_value(raw[col[y]]) for y in WORLD_YEARS}
+            if label.strip().upper() == "TOTAL":
+                total_row = vals
+            else:
+                by_label[label] = vals
+    if total_row is None:
+        raise SystemExit("world CSV: no TOTAL row to check against")
+    return by_label, total_row
+
+
+def build_world():
+    """Build the world species list (per-year counts) and run the TOTAL check.
+
+    Returns (species_out, total_row, world_sums) where world_sums[year] is the
+    sum of the 15 species in that year (== TOTAL row, verified here).
+    """
+    by_label, total_row = load_world()
+
+    mapped = {lbl for (lbl, _, _, _) in WORLD_SPECIES}
+    extra = set(by_label) - mapped          # an unmapped species row -> surface
+    missing = mapped - set(by_label)
+    if missing:
+        raise SystemExit("world CSV: expected species missing: %s" % sorted(missing))
+    if extra:
+        raise SystemExit("world CSV: unmapped species row(s) %s — refusing to "
+                         "silently drop. Add to WORLD_SPECIES." % sorted(extra))
+
+    # 15 species must sum to the TOTAL row, every year (the file's own check).
+    world_sums = {}
+    for y in WORLD_YEARS:
+        s = sum(by_label[lbl][y] for lbl in mapped)
+        world_sums[y] = s
+        if s != total_row[y]:
+            raise SystemExit("world CSV: 15 species sum %d != TOTAL %d for %d"
+                             % (s, total_row[y], y))
+
+    species_out = [
+        {
+            "id": sid,
+            "name": display,
+            "group": group,
+            "counts": {str(y): by_label[label][y] for y in WORLD_YEARS},
+        }
+        for (label, sid, display, group) in WORLD_SPECIES
+    ]
+    return species_out, total_row, world_sums
+
+
+def build_countries():
+    """Build the country drill-down, re-shaped onto the 15 world ids.
+
+    Returns (countries_out, raw_by_country) — the second is the pre-merge
+    per-country head counts keyed by ORIGINAL country-species label, kept only
+    for the merge spot-check in the verification printout.
+    """
+    by_country = defaultdict(lambda: defaultdict(float))   # country -> world_id -> count
+    raw_by_country = defaultdict(lambda: defaultdict(float))  # country -> orig label -> count
+    country_code = {}
+    seen_labels = set()
+
+    with open(COUNTRY_SRC, encoding="utf-8-sig") as f:
+        for r in csv.DictReader(f):
+            sp = r["species"]
+            seen_labels.add(sp)
+            if sp not in COUNTRY_TO_WORLD:
+                raise SystemExit(
+                    "country CSV: unmapped species label %r — refusing to guess. "
+                    "Add it to COUNTRY_TO_WORLD." % sp)
+            if int(r["area_code"]) == CHINA_AGGREGATE:
+                continue
+            if int(r["year"]) != COUNTRY_YEAR:
+                continue
+            v = num(r["animals_killed"])
+            if v <= 0:
+                continue
+            target = COUNTRY_TO_WORLD[sp]
+            country_code[r["country"]] = int(r["area_code"])
+            raw_by_country[r["country"]][sp] += v
+            if target is None:
+                continue                       # dropped (game / mammals_other)
+            by_country[r["country"]][target] += v
+
+    countries_out = []
+    for name, spd in by_country.items():
+        total = sum(spd.values())
+        countries_out.append(
+            {
+                "name": name,
+                "code": country_code[name],
+                "total": round(total),
+                "by_species": {sp: round(v) for sp, v in spd.items() if v > 0},
+            }
+        )
+    countries_out.sort(key=lambda c: c["total"], reverse=True)
+    return countries_out, raw_by_country
+
+
 def build_sea():
     """Build the aquatic-animal block from config/sea_summary.csv.
 
     These are fishcount.org.uk estimate RANGES (tonnage / mean weight), not FAO
     head counts, so each category carries a low and a high. The block is kept
-    deliberately separate from the land data: it is never added to world_total
+    deliberately separate from the land data: it is never added to a land total
     and never appears in the country drill-down.
 
     The headline sea figure uses the LOW estimate. One row, feed_fish, is a
@@ -131,8 +298,8 @@ def build_sea():
             "headline_basis": "low",
             "unit": "individuals",
             "note": "Aquatic animals killed for food, as estimate ranges. Kept "
-            "SEPARATE from the land data: not part of world_total and not in the "
-            "country breakdown. The headline uses the LOW estimate; high is "
+            "SEPARATE from the land data: not part of any land total and not in "
+            "the country breakdown. The headline uses the LOW estimate; high is "
             "carried for range display. feed_fish is a SUBSET of wild-caught "
             "fish (counts_in_total=false) — a footnote only, never added.",
         },
@@ -143,105 +310,67 @@ def build_sea():
     }
 
 
+def avg3(counts):
+    """Plain arithmetic mean of the AVG_YEARS values (floats kept)."""
+    return sum(counts[str(y)] for y in AVG_YEARS) / len(AVG_YEARS)
+
+
 def main():
-    rows = []
-    with open(SRC, encoding="utf-8-sig") as f:
-        for r in csv.DictReader(f):
-            if int(r["area_code"]) == CHINA_AGGREGATE:
-                continue
-            rows.append(r)
+    species_out, total_row, world_sums = build_world()
+    countries_out, raw_by_country = build_countries()
 
-    # Reference year per species = TARGET_YEAR when present, else that
-    # species' latest year (covers the two series that end in 2017).
-    years_avail = defaultdict(set)
-    for r in rows:
-        years_avail[r["species"]].add(int(r["year"]))
-    ref_year = {
-        sp: (TARGET_YEAR if TARGET_YEAR in ys else max(ys))
-        for sp, ys in years_avail.items()
-    }
-
-    world = defaultdict(float)                      # species -> count
-    by_country = defaultdict(lambda: defaultdict(float))  # country -> species -> count
-    country_code = {}
-    for r in rows:
-        sp = r["species"]
-        if int(r["year"]) != ref_year[sp]:
-            continue
-        v = num(r["animals_killed"])
-        if v <= 0:
-            continue
-        world[sp] += v
-        by_country[r["country"]][sp] += v
-        country_code[r["country"]] = int(r["area_code"])
-
-    world_total = sum(world.values())
-
-    species = sorted(world.keys(), key=lambda s: world[s], reverse=True)
-    species_out = [
-        {
-            "id": sp,
-            "name": DISPLAY.get(sp, sp.replace("_", " ").title()),
-            "count": round(world[sp]),
-            "year": ref_year[sp],
-            "share": world[sp] / world_total,
-            "group": "avian" if sp in AVIAN else "terrestrial",
-        }
-        for sp in species
-    ]
-
-    countries_out = []
-    for name, spd in by_country.items():
-        total = sum(spd.values())
-        countries_out.append(
-            {
-                "name": name,
-                "code": country_code[name],
-                "total": round(total),
-                "by_species": {sp: round(v) for sp, v in spd.items() if v > 0},
-            }
-        )
-    countries_out.sort(key=lambda c: c["total"], reverse=True)
-
-    years_used = sorted({ref_year[sp] for sp in species})
     data = {
         "meta": {
-            "source": "FAOSTAT — Crops and livestock products, "
+            "land_source": "FAOSTAT — Crops and livestock products, "
             "Producing/Slaughtered animals",
             "source_url": "https://www.fao.org/faostat/en/#data/QCL",
-            "reference_years": years_used,
-            "primary_year": max(years_used),
+            "world_years": WORLD_YEARS,
+            "avg_years": AVG_YEARS,
+            "default_year": "avg",
+            "country_reference_year": COUNTRY_YEAR,
             "generated": dt.date.today().isoformat(),
             "breaths_per_minute": 15,
-            "note": "Land animals slaughtered for food worldwide. The FAO "
-            "'China' aggregate is excluded to avoid double counting. Most "
-            "series are "
-            + str(max(years_used))
-            + "; two minor series end in "
-            + str(min(years_used))
-            + ". Figures count individual animals, not biomass.",
+            "note": "Land animals slaughtered for food worldwide. The world / "
+            "by-kind figures are a 15-species FAOSTAT series, selectable by year "
+            "(2018–2024) or shown as the plain 2022–2024 average by default. The "
+            "country drill-down is the sum of reporting countries for "
+            + str(COUNTRY_YEAR)
+            + ", re-shaped to the same 15 species (the FAO 'China' aggregate is "
+            "excluded to avoid double counting). Figures count individual "
+            "animals, not biomass.",
         },
-        "world_total": round(world_total),
+        # Year-selection policy lives in the data, not the UI: which years can be
+        # chosen, which years the default average spans, and that the default is
+        # that average.
+        "world": {
+            "years": WORLD_YEARS,
+            "avg_years": AVG_YEARS,
+            "default": "avg",
+        },
         "species": species_out,
         "countries": countries_out,
     }
 
-    # Aquatic animals — a structurally separate block (see build_sea). Added
-    # last so the land keys above serialise byte-for-byte as before.
+    # Aquatic animals — a structurally separate block (see build_sea).
     data["sea"] = build_sea()
 
     with open(OUT, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, separators=(",", ":"))
 
+    # ---- verification printout -------------------------------------------------
     sea = data["sea"]
+    avg_total = sum(avg3(sp["counts"]) for sp in species_out)
     print(f"Wrote {OUT}")
-    print(f"  world total : {round(world_total):,}  (land; sea excluded)")
-    print(f"  species     : {len(species_out)}")
-    print(f"  countries   : {len(countries_out)}")
-    print(f"  ref years   : {years_used}")
-    print(f"  sea cats    : {len(sea['categories'])} counted + feed_fish (subset, excluded)")
-    print(f"  sea low     : {sea['total_low']:,}  (headline basis)")
-    print(f"  sea high    : {sea['total_high']:,}")
+    print(f"  world species : {len(species_out)}  (sum to TOTAL row, all years OK)")
+    print(f"  countries     : {len(countries_out)}")
+    print(f"  country year  : {COUNTRY_YEAR}")
+    print("  world totals per selectable year (15 species == TOTAL row):")
+    for y in WORLD_YEARS:
+        print(f"      {y}: {world_sums[y]:>15,}   (TOTAL row {total_row[y]:>15,})")
+    print(f"  default 3-yr avg ({'+'.join(map(str, AVG_YEARS))})/3 total: "
+          f"{round(avg_total):>15,}")
+    print(f"  sea cats      : {len(sea['categories'])} counted + feed_fish (subset, excluded)")
+    print(f"  sea low       : {sea['total_low']:,}  (headline basis)")
 
 
 if __name__ == "__main__":

@@ -121,6 +121,9 @@
   }
   .scope select:focus-visible{outline:none;border-bottom-color:var(--ink)}
   .scope option{background:#16151a;color:var(--ink)}
+  /* the year row hides for scopes where it has no effect (aquatic / a single
+     country); an explicit rule is needed since .scope-primary sets display */
+  .scope-year[hidden]{display:none}
 
   /* ---- hero counter ---- */
   .hero{margin:0 0 3.4rem}
@@ -414,7 +417,7 @@
 <main>
   <div class="topbar">
     <p class="kicker">A live memorial</p>
-    <span class="version" id="version">v3.3</span>
+    <span class="version" id="version">v3.4</span>
   </div>
   <h1>Killed for food</h1>
 
@@ -429,6 +432,11 @@
       </div>
       <span class="scope-or">or</span>
       <select id="countrySelect" aria-label="Count a single country"></select>
+    </div>
+    <div class="scope-primary scope-year" id="yearRow">
+      <span class="scope-label">Year</span>
+      <select id="yearSelect" aria-label="Reference year for the worldwide land figures"></select>
+      <span class="scope-or">for the land figures</span>
     </div>
     <div class="aquatic-controls" id="aquaticControls" hidden>
       <div class="ac-row">
@@ -494,7 +502,7 @@
     <p id="srcLine"></p>
     <p>These are animals killed for food, counted as individuals. Terrestrial and avian figures — mammals and birds — are FAOSTAT head counts; aquatic animals, by number the largest group of all, killed in the hundreds of billions to trillions, can now be counted with the control above, where the figures are <a href="https://fishcount.org.uk" rel="noopener">fishcount.org.uk</a> estimates rather than head counts. Not shown anywhere here: animals who die before slaughter, the day-old male chicks culled at hatcheries, or animals killed outside recorded food production. The true toll is higher than what is shown here.</p>
     <p>The pace assumes the year's killing is spread evenly across it; the live figures are a steady rate, not a live feed. The FAO "China" aggregate is excluded so its regions are not counted twice. <span id="breathNote"></span></p>
-    <p class="basis-note" id="basisNote">Sum of reporting countries including FAO estimates, 2023. FAO's modeled global aggregate is somewhat higher (~100B+); we use the country-sum because every figure is individually verifiable.</p>
+    <p class="basis-note" id="basisNote"></p>
     <p class="fineprint" id="genLine"></p>
   </footer>
 </main>
@@ -509,7 +517,7 @@
   function commas(n){ return fmt.format(Math.max(0, Math.floor(n))); }
 
   /* ---------- experimental display options ---------- */
-  var opts = { ticking:false, subOpened:false, seaBasis:"low", seaBivalve:false, seaOther:false };
+  var opts = { ticking:false, subOpened:false, seaBasis:"low", seaBivalve:false, seaOther:false, year:"avg" };
   try {
     var saved = JSON.parse(localStorage.getItem("astc.opts") || "{}");
     if(saved && typeof saved === "object"){
@@ -520,6 +528,9 @@
         ? saved.seaBasis : (saved.seaHigh ? "high" : "low");
       opts.seaBivalve = !!saved.seaBivalve;  // include bivalve tier
       opts.seaOther = !!saved.seaOther;      // include gastropod + other-mollusc tier
+      // world reference year: "avg" (default) | a "YYYY" string. Validated
+      // against the data's selectable years once DATA loads (see boot).
+      if(typeof saved.year === "string") opts.year = saved.year;
     }
   } catch(e){}
   function saveOpts(){ try{ localStorage.setItem("astc.opts", JSON.stringify(opts)); }catch(e){} }
@@ -566,9 +577,44 @@
     "__aquatic__": document.getElementById("scopeAquatic")
   };
   var countrySelectEl = document.getElementById("countrySelect");
+  var yearRowEl = document.getElementById("yearRow");
+  var yearSelectEl = document.getElementById("yearSelect");
   var swPre, swText, swPost, openedAtStr = "";
   var speciesCounters = []; // {el, perSecond}
   var speciesAnnual = {};   // species id -> worldwide annual toll (for the rate tooltip)
+  var countryYearLabel = "";  // the country drill-down's fixed anchor year (set in boot)
+
+  /* ---------- world reference year ----------
+     The world / by-kind figures carry a per-year head count (2018–2024). The
+     active basis is opts.year: "avg" = the plain arithmetic mean of the data's
+     avg_years ((v2022+v2023+v2024)/3 per species, computed here, NOT read from
+     any average column), or a single "YYYY". applyYear() folds the active value
+     onto each species' .count/.year so the rest of the scope logic is unchanged;
+     it is re-run whenever the year selection changes. The country drill-down is
+     NOT year-selectable — it stays anchored at meta.country_reference_year. */
+  function landValue(s){
+    if(opts.year === "avg"){
+      var ys = DATA.world.avg_years, t = 0;
+      for(var i=0;i<ys.length;i++) t += s.counts[ys[i]];
+      return t / ys.length;
+    }
+    return s.counts[opts.year];
+  }
+  function landYearLabel(){
+    if(opts.year === "avg"){
+      var ys = DATA.world.avg_years;
+      return ys[0] + "–" + ys[ys.length-1] + " average";
+    }
+    return opts.year;
+  }
+  function applyYear(){
+    speciesAnnual = {};
+    DATA.species.forEach(function(s){
+      s.count = landValue(s);
+      s.year = landYearLabel();
+      speciesAnnual[s.id] = s.count;   // worldwide annual basis for the rate tooltip
+    });
+  }
 
   function paceRows(annual){
     var perMonth  = annual/12;
@@ -656,7 +702,11 @@
     }
   }
 
-  var LAND_RATE_NOTE = "Worldwide, spread evenly across the year (avg)";
+  function landRateNote(){
+    return (opts.year === "avg"
+      ? "Worldwide, " + landYearLabel() + ", spread evenly across the year"
+      : "Worldwide in " + landYearLabel() + ", spread evenly across the year");
+  }
   function basisLabel(){ return opts.seaBasis === "high" ? "High" : (opts.seaBasis === "mid" ? "Mid" : "Low"); }
   function aquaticRateNote(){
     return "A fishcount estimate, not a head count — derived from FAO production " +
@@ -821,7 +871,7 @@
       // subtle ⓘ in the card's top-right — one finalized rate per item
       if(s.id && speciesAnnual.hasOwnProperty(s.id)){
         // land species: static worldwide rate
-        head.appendChild(makeSpeciesInfo([{ value: formatRate(speciesAnnual[s.id]) }], LAND_RATE_NOTE));
+        head.appendChild(makeSpeciesInfo([{ value: formatRate(speciesAnnual[s.id]) }], landRateNote()));
       } else if(s.sea){
         // aquatic category: rate at the selected Low/Mid/High basis
         head.appendChild(makeSpeciesInfo([{ value: formatRate(s.count) }], aquaticRateNote()));
@@ -890,7 +940,7 @@
     // Make clear this is a breakdown of the annual total, not the live count.
     var cap = document.createElement("div");
     cap.className = "drill-cap";
-    cap.appendChild(document.createTextNode(s.year + " total, by country "));
+    cap.appendChild(document.createTextNode(countryYearLabel + " total, by country "));
     var capEm = document.createElement("em");
     capEm.textContent = "— not the running count above";
     cap.appendChild(capEm);
@@ -980,9 +1030,9 @@
       " seconds) and multiplied by the time elapsed since 1 January, 00:00 UTC. " +
       "A projection, not a live feed.";
   }
-  function landTip(total, label){
-    return "FAOSTAT's latest annual count of animals slaughtered for food, for " +
-      label + ", as individual head. " + projectionSentence(total);
+  function landTip(total, label, yearLabel){
+    return "FAOSTAT's annual count of animals slaughtered for food, for " +
+      label + " (" + yearLabel + "), as individual head. " + projectionSentence(total);
   }
   function aquaticTip(total){
     return "Aquatic figures are fishcount.org.uk estimates — FAO production " +
@@ -990,9 +1040,9 @@
       "count. The controls below set which end of the range to show and which " +
       "sentience groups to include. " + projectionSentence(total);
   }
-  function allTip(total, landTotal, seaVal){
+  function allTip(total, landTotal, seaVal, yearLabel){
     return "Everything combined: land animals from FAOSTAT (" + commas(landTotal) +
-      " a year, individual head) plus the fishcount aquatic estimate (" +
+      ", " + yearLabel + ", individual head) plus the fishcount aquatic estimate (" +
       commas(seaVal) + ", an estimate with a range — see the sea controls). " +
       projectionSentence(total);
   }
@@ -1035,10 +1085,10 @@
       headLabel = "By species";
       note.textContent = "· " + group + " animals";
       basisVisible = true;
-      tip = landTip(total, group + " animals");
+      tip = landTip(total, group + " animals", landYearLabel());
 
     } else if(scopeName === "__all__"){
-      var landTotal = sumField(DATA.species, "count");   // equals world_total
+      var landTotal = sumField(DATA.species, "count");   // world land total at the selected year
       var seaCats = aquaticCats();
       var seaVal = seaValue(seaCats);
       total = landTotal + seaVal;
@@ -1054,15 +1104,17 @@
       headLabel = "By species & category";
       note.textContent = "";
       basisVisible = true;
-      tip = allTip(total, landTotal, seaVal);
+      tip = allTip(total, landTotal, seaVal, landYearLabel());
 
     } else {
-      // a single country — land only (there is no country-level aquatic data)
+      // a single country — land only (there is no country-level aquatic data).
+      // Country figures are anchored at countryYearLabel and are NOT moved by
+      // the world year selector, so each row carries that fixed year.
       var c = DATA.countries.find(function(x){ return x.name === scopeName; });
       var arr = [];
       DATA.species.forEach(function(s){
         var v = c.by_species[s.id];
-        if(v && v > 0) arr.push({ id:s.id, name:s.name, count:v, year:s.year, drillable:false });
+        if(v && v > 0) arr.push({ id:s.id, name:s.name, count:v, year:countryYearLabel, drillable:false });
       });
       arr.sort(function(a, b){ return b.count - a.count; });
       items = arr;
@@ -1071,14 +1123,19 @@
       headLabel = "By species";
       note.textContent = "· " + scopeName;
       basisVisible = false;
-      tip = landTip(total, scopeName);
+      tip = landTip(total, scopeName, countryYearLabel);
     }
 
     reflectScopeControls(scopeName);
 
+    // The world reference-year control governs the land figures only; show it
+    // for the land scopes (all / terrestrial / avian) and hide it where it has
+    // no effect — the aquatic estimate and the (year-anchored) single country.
+    yearRowEl.hidden = !(scopeName === "__all__" || scopeName === "__terrestrial__" || scopeName === "__avian__");
+
     // The land provenance endnote applies only where the figure rests on the
-    // FAOSTAT land country-sum (all / terrestrial / avian) — not for the
-    // aquatic estimates or a single country.
+    // worldwide land series (all / terrestrial / avian) — not for the aquatic
+    // estimates or a single country.
     document.getElementById("basisNote").hidden = !basisVisible;
 
     // Sea estimate controls + honest range: only for the estimate-bearing
@@ -1160,8 +1217,15 @@
   /* ---------- boot ---------- */
   function boot(data){
     DATA = data;
-    // worldwide annual per species — the static basis for each card's rate tooltip
-    DATA.species.forEach(function(sp){ speciesAnnual[sp.id] = sp.count; });
+    // Validate the persisted world year against the data's selectable years
+    // ("avg" + each world year); fall back to the data's default otherwise.
+    var validYears = { avg:true };
+    (DATA.world.years || []).forEach(function(y){ validYears[String(y)] = true; });
+    if(!validYears[opts.year]) opts.year = DATA.world.default || "avg";
+    countryYearLabel = String(DATA.meta.country_reference_year);
+    // Fold the active year onto each species (.count/.year) and seed each card's
+    // rate-tooltip basis. Re-run whenever the year selection changes.
+    applyYear();
 
     // scope kind toggles (all / terrestrial / avian / aquatic) — a visible
     // segmented control; each sets the single active scope.
@@ -1182,6 +1246,29 @@
     });
     countrySelectEl.addEventListener("change", function(){
       applyScope(countrySelectEl.value || "__all__");
+    });
+
+    // world reference-year control — the default 3-year average first, then each
+    // year newest-first. Changing it folds the chosen basis onto the species and
+    // recomputes every figure (counters, pace, rates, tooltips, footer) live;
+    // the choice is persisted across visits.
+    var avgYrs = DATA.world.avg_years;
+    var avgOpt = document.createElement("option");
+    avgOpt.value = "avg";
+    avgOpt.textContent = avgYrs[0] + "–" + avgYrs[avgYrs.length-1] + " average";
+    yearSelectEl.appendChild(avgOpt);
+    DATA.world.years.slice().sort(function(a,b){ return b-a; }).forEach(function(y){
+      var o = document.createElement("option");
+      o.value = String(y); o.textContent = String(y);
+      yearSelectEl.appendChild(o);
+    });
+    yearSelectEl.value = opts.year;
+    yearSelectEl.addEventListener("change", function(){
+      opts.year = yearSelectEl.value || "avg";
+      saveOpts();
+      applyYear();
+      renderSrcLine();
+      applyScope(currentScope);
     });
 
     // subline scaffold + the time this page was opened
@@ -1250,16 +1337,26 @@
     window.addEventListener("scroll", onViewportChange, true);
     window.addEventListener("resize", onViewportChange);
 
-    // footer text
+    // footer provenance + figures. renderSrcLine reflects the selected world
+    // year and is re-run when it changes; the rest is set once.
     var m = DATA.meta;
-    var yrs = m.reference_years.slice().sort(function(a,b){return a-b;});
-    var yrText = (yrs.length>1)
-      ? ("latest available year (" + Math.max.apply(null,yrs) + "; two minor series " + Math.min.apply(null,yrs) + ")")
-      : ("year " + yrs[0]);
-    document.getElementById("srcLine").innerHTML =
-      "Source: <a href=\"" + m.source_url + "\" rel=\"noopener\">FAOSTAT</a> — " +
-      "the UN Food and Agriculture Organization's record of animals slaughtered for meat, " + yrText + ". " +
-      "Worldwide, that is <b style=\"color:var(--ink-soft)\">" + commas(DATA.world_total) + "</b> land animals in a single year.";
+    function renderSrcLine(){
+      var landTotal = sumField(DATA.species, "count");
+      var av = DATA.world.avg_years;
+      var yp = (opts.year === "avg")
+        ? ("in an average year (" + av[0] + "–" + av[av.length-1] + ")")
+        : ("in " + opts.year);
+      document.getElementById("srcLine").innerHTML =
+        "Source: <a href=\"" + m.source_url + "\" rel=\"noopener\">FAOSTAT</a> — " +
+        "the UN Food and Agriculture Organization's record of animals slaughtered for meat. " +
+        "Worldwide, that is <b style=\"color:var(--ink-soft)\">" + commas(landTotal) + "</b> land animals " + yp + ".";
+      document.getElementById("basisNote").textContent =
+        "Worldwide and by-kind totals are a 15-species FAOSTAT series (the " +
+        (opts.year === "avg" ? ("plain " + av[0] + "–" + av[av.length-1] + " average") : ("year " + opts.year)) +
+        "). The country breakdown is the sum of reporting countries for " + countryYearLabel +
+        ", re-shaped to those same 15 species; the two are drawn from related FAO series and differ slightly.";
+    }
+    renderSrcLine();
     document.getElementById("breathNote").textContent =
       "“Per breath” uses a placeholder of " + m.breaths_per_minute + " breaths per minute.";
     document.getElementById("genLine").textContent = "Data compiled " + m.generated + ".";

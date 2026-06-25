@@ -23,13 +23,14 @@ open time).
 The data pipeline is:
 
 ```
-data/raw/animals_killed_by_species_country_year.csv
+data/raw/world-data-six-year.csv                     ┐ world / by-kind figures
+data/raw/animals_killed_by_species_country_year.csv  ┘ country drill-down
         → scripts/build_data.py
         → data.json   (repo root)
         → index.html  (fetches data.json)
 ```
 
-`data.json` is committed, so the build only needs to run when the source CSV or
+`data.json` is committed, so the build only needs to run when a source CSV or
 the build logic changes; re-commit the regenerated `data.json` when it does.
 
 ## Versioning & commit workflow (standing instruction)
@@ -76,7 +77,8 @@ animal-slaughter-toll/
 └── data/
     ├── README.md
     └── raw/
-        ├── animals_killed_by_species_country_year.csv   # the only CSV the build reads
+        ├── world-data-six-year.csv                      # world/by-kind: 15 species × years 2018–2024 (+ TOTAL check row)
+        ├── animals_killed_by_species_country_year.csv   # country drill-down (re-shaped to the same 15 species)
         └── reference/    # 13 FAO code-lookup tables (provenance only, unused by code)
 ```
 
@@ -101,24 +103,42 @@ number silently blows up or collapses. Guard both:
    **×1000**. Miss it and chickens — ~89% of the total — collapse by three
    orders of magnitude.
 
-The current `data/raw/…csv` is already in single-head, one-item-per-species
-form; `build_data.py` only drops the FAO "China" aggregate (area code 351, which
-equals mainland + HK + Macao + Taiwan) and anchors years (below).
+Both land CSVs are already in single-head, one-item-per-species form (the two
+traps above were handled upstream). On top of that, `build_data.py`:
 
-The published **86B is the auditable country-sum** (every figure traces to a
-reporting country, FAO row-level estimates included); FAO's own **World aggregate
-is higher (~104B)** for ordinary aggregation/imputation reasons — it gap-fills for
-non-reporting countries at the aggregate level. Both are legitimate FAO, and we
-**intentionally use the country-sum** so every number is individually verifiable.
-This gap is expected — not a bug to re-investigate.
+- reads the **world / by-kind** figures from `world-data-six-year.csv` — 15
+  species × years 2018–2024, plus a `TOTAL` row used **only as a check** (the 15
+  species must sum to it each year); the file's own average/growth columns are
+  ignored;
+- builds the **country drill-down** from the per-country CSV at 2023, dropping
+  the FAO "China" aggregate (area code 351 = mainland + HK + Macao + Taiwan) and
+  **re-shaping the per-country species onto the same 15-species taxonomy**:
+  `game` and `mammals_other` are dropped from every country, `camels` +
+  `camelids_other` merge into **Camel (All Camelids)**, and `asses` + `mules`
+  merge into **Donkeys & mules**. Any country-species label not in
+  `COUNTRY_TO_WORLD` aborts the build, so a new/renamed label can never be
+  silently lost or mis-bucketed.
 
-## Anchoring
+The **world / by-kind headline comes from the world series**: ~**86.3B for 2023**,
+~**87.9B for 2024**, or the **2022–2024 average (~86.28B)** by default. The
+**country drill-down is a separate country-sum** at 2023 (~86.08B). The two are
+drawn from related FAOSTAT series and **differ slightly by design** — the world
+figure is not re-derived from the country rows. (A world-vs-country-sum toggle
+remains intentionally tabled.) This gap is expected — not a bug to re-investigate.
 
-Figures are anchored to the **latest complete year, 2023**. FAO's 2024 data is
-still partial/under revision and is treated as incomplete. `build_data.py` uses
-2023 for every series that has it; the two negligible series (`game`,
-`mammals_other`) end in 2017 and fall back to their own latest year. The
-counter projects the annual total at a constant per-second rate.
+## Anchoring & year selection
+
+The **world / by-kind** figures are **year-selectable**: the site offers each
+year **2018–2024**, or — the default — the **plain arithmetic mean of 2022, 2023
+and 2024**, computed per species as `(v2022+v2023+v2024)/3` (never read from the
+file's average column). The choice persists in `localStorage` (under `astc.opts`,
+key `year`) and every figure — counters, pace, per-species rates, tooltips,
+footer — recomputes from it.
+
+The **country drill-down is NOT year-selectable**: it stays anchored at **2023**
+(`meta.country_reference_year`), so a species card's selected-year world figure
+and its by-country breakdown (always 2023) can legitimately differ. The counter
+projects the annual total at a constant per-second rate.
 
 ## Sea / aquatic animals (next feature — guardrails)
 
@@ -142,9 +162,15 @@ Guardrails for that work:
 After any data change, sanity-check against these. If they drift, something
 regressed (see traps above):
 
-- **Land:** ~**86 billion**/year (86,076,509,475), ≈ **2,728**/second,
-  **chickens ≈ 89%** of the total.
-- **Sea (when added):** floor of ~**1.58 trillion**/year.
+- **Land (world series):** default **2022–2024 average ≈ 86.28 billion**/year
+  (86,284,620,292); single years **2023 = 86,298,808,205** and
+  **2024 = 87,896,729,120**; the 15 species sum to the file's `TOTAL` row every
+  year; **chickens ≈ 89%** of the total.
+- **Land (country drill-down, 2023):** country-sum ≈ **86.08 billion**; after
+  re-shaping, every country's species labels are exactly the 15 world ids (no
+  `game` / `mammals_other`), and a merged species equals the sum of its old
+  component rows (e.g. China's Donkeys & mules = asses + mules = 694,140).
+- **Sea:** floor of ~**1.58 trillion**/year (unchanged).
 
 ## Conventions
 
