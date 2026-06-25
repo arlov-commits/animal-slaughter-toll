@@ -368,6 +368,39 @@
     font-variant-numeric:tabular-nums;white-space:nowrap;
   }
   .kpi-stat dd.live{color:var(--ink)}
+  /* ---- specimen plate: a framed engraving shown directly under the card name.
+     Universal for every card (land species and aquatic categories alike): the
+     same 16:9 slot is reserved, so a card only grows downward and never widens
+     — the grid stays exactly as it is. If img/species/{id}.png exists it shows
+     framed; on a 404 the image onerror swap reveals the faint empty-plate frame
+     instead. Drop a matching file in later and it auto-appears with no code
+     change. */
+  .kpi-plate{
+    margin:.8rem 0 .15rem;
+    border:1px solid var(--line-strong);
+    background:#17161a;
+    padding:.34rem;
+    box-shadow:0 1px 3px rgba(0,0,0,.45);
+  }
+  .kpi-well{
+    position:relative;width:100%;
+    aspect-ratio:16 / 9;          /* reserve the slot whatever the load state */
+    overflow:hidden;
+    background:#141317;
+  }
+  .kpi-img{
+    position:absolute;inset:0;width:100%;height:100%;
+    object-fit:cover;display:block;
+  }
+  /* image absent / not yet uploaded — a quiet empty plate, same dimensions */
+  .kpi-plate.is-empty{
+    background:transparent;
+    border-style:dashed;
+    border-color:var(--line);
+    box-shadow:none;
+  }
+  .kpi-plate.is-empty .kpi-well{background:transparent}
+  .kpi-plate.is-empty .kpi-img{display:none}
   .drill{
     overflow:hidden;height:0;
     transition:height .32s ease;
@@ -417,7 +450,7 @@
 <main>
   <div class="topbar">
     <p class="kicker">A live memorial</p>
-    <span class="version" id="version">v3.4</span>
+    <span class="version" id="version">v3.6</span>
   </div>
   <h1>Killed for food</h1>
 
@@ -878,6 +911,27 @@
       }
       li.appendChild(head);
 
+      // specimen plate — directly under the name. One rule for all cards: load
+      // img/species/{id-with-hyphens}.png; if it 404s (aquatic categories, or
+      // any species whose image isn't uploaded yet) the onerror handler swaps
+      // in the faint empty-plate placeholder. No per-card special-casing — drop
+      // a matching file in later and it just appears.
+      var plate = document.createElement("div");
+      plate.className = "kpi-plate";
+      var well = document.createElement("div");
+      well.className = "kpi-well";
+      var img = document.createElement("img");
+      img.className = "kpi-img";
+      img.loading = "lazy";
+      img.decoding = "async";
+      img.alt = "";                       // decorative — the species name heads the card
+      img.setAttribute("aria-hidden", "true");
+      img.addEventListener("error", function(){ plate.classList.add("is-empty"); });
+      img.src = "img/species/" + String(s.id || s.name || "").replace(/_/g, "-") + ".png";
+      well.appendChild(img);
+      plate.appendChild(well);
+      li.appendChild(plate);
+
       // the metric: killed so far this year (live, Flowing/Ticking)
       var big = document.createElement("div");
       big.className = "kpi-big";
@@ -931,6 +985,7 @@
           if(li.classList.contains("open")) drill.style.height = "auto";
         });
       }
+
       ul.appendChild(li);
     });
   }
