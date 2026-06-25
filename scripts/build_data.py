@@ -34,6 +34,7 @@ this file, so data.json is written to the repo root where index.html fetches it.
 import csv
 import json
 import os
+import re
 import datetime as dt
 from collections import defaultdict
 
@@ -109,6 +110,17 @@ def num(s):
 
 def truthy(s):
     return str(s).strip().lower() == "true"
+
+
+def slugify(name):
+    """A clean lowercase id from a display name, matching the land-species id
+    style (lowercase, '_'-separated): every run of non-alphanumerics collapses
+    to one underscore. 'Wild-caught fish' -> 'wild_caught_fish'; 'Farmed
+    molluscs (unnamed)' -> 'farmed_molluscs_unnamed'. The site's per-card image
+    lookup turns '_' into '-' for the file name, so these resolve to
+    img/species/wild-caught-fish.png etc. — the same convention as the land
+    cards (e.g. id 'rabbits_hares' -> img/species/rabbits-hares.png)."""
+    return re.sub(r"[^a-z0-9]+", "_", name.strip().lower()).strip("_")
 
 
 def parse_world_value(s):
@@ -266,6 +278,10 @@ def build_sea():
     with open(SEA_SRC, encoding="utf-8-sig") as f:
         for r in csv.DictReader(f):
             entry = {
+                # stable id/slug for the per-card image lookup (see slugify);
+                # decoupled here so a card can find img/species/{id}.png the
+                # same way land species do.
+                "id": slugify(r["category"]),
                 "category": r["category"],
                 "group": r["group"],            # class group: fish / decapod / mollusc
                 "fishery": r["fishery"],
@@ -354,6 +370,16 @@ def main():
     # Aquatic animals — a structurally separate block (see build_sea).
     data["sea"] = build_sea()
 
+    # Card ids must be unique and disjoint across land + sea, since the UI keys
+    # cards (and their image lookup) on a single id namespace. Abort on a clash
+    # rather than let one card's image/rate shadow another's.
+    land_ids = [sp["id"] for sp in species_out]
+    sea_ids = [c["id"] for c in data["sea"]["categories"]]
+    all_ids = land_ids + sea_ids
+    dupes = sorted({i for i in all_ids if all_ids.count(i) > 1})
+    if dupes:
+        raise SystemExit("card id collision across land/sea: %s" % dupes)
+
     with open(OUT, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, separators=(",", ":"))
 
@@ -371,6 +397,9 @@ def main():
           f"{round(avg_total):>15,}")
     print(f"  sea cats      : {len(sea['categories'])} counted + feed_fish (subset, excluded)")
     print(f"  sea low       : {sea['total_low']:,}  (headline basis)")
+    print("  sea card ids -> image file:")
+    for c in sea["categories"]:
+        print(f"      {c['category']:<28} {c['id']:<26} img/species/{c['id'].replace('_', '-')}.png")
 
 
 if __name__ == "__main__":

@@ -10,7 +10,7 @@
    activate). Online visits also refresh the cached HTML and data, so network
    users are never stuck on a stale copy even if VERSION is unchanged. */
 
-var VERSION = 'v3.6';
+var VERSION = 'v3.7';
 var SHELL = 'astc-shell-' + VERSION;
 var RUNTIME = 'astc-runtime-' + VERSION;
 
