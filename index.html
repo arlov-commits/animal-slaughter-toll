@@ -450,7 +450,7 @@
 <main>
   <div class="topbar">
     <p class="kicker">A live memorial</p>
-    <span class="version" id="version">v3.6</span>
+    <span class="version" id="version">v3.7</span>
   </div>
   <h1>Killed for food</h1>
 
@@ -1121,7 +1121,7 @@
       total = seaValue(cats);
       seaRange = [ sumField(cats, "low"), sumField(cats, "high") ];
       items = cats.map(function(c){
-        return { name:c.category, count:catValue(c), year:c.year, drillable:false, sea:true };
+        return { id:c.id, name:c.category, count:catValue(c), year:c.year, drillable:false, sea:true };
       });
       lead = "Killed so far this year";
       headLabel = "By category";
@@ -1152,7 +1152,7 @@
       items = DATA.species.map(function(s){
         return { id:s.id, name:s.name, count:s.count, year:s.year, drillable:true };
       }).concat(seaCats.map(function(c){
-        return { name:c.category, count:catValue(c), year:c.year, drillable:false, sea:true };
+        return { id:c.id, name:c.category, count:catValue(c), year:c.year, drillable:false, sea:true };
       }));
       items.sort(function(a, b){ return b.count - a.count; });
       lead = "Killed so far this year";
