@@ -368,15 +368,15 @@
     font-variant-numeric:tabular-nums;white-space:nowrap;
   }
   .kpi-stat dd.live{color:var(--ink)}
-  /* ---- specimen plate: a framed engraving pinned at the foot of each card.
+  /* ---- specimen plate: a framed engraving shown directly under the card name.
      Universal for every card (land species and aquatic categories alike): the
-     same 16:9 slot is reserved below the existing content, so a card only grows
-     downward and never widens — the grid stays exactly as it is. If
-     img/species/{id}.png exists it shows framed; on a 404 the image onerror
-     swap reveals the faint empty-plate frame instead. Drop a matching file in
-     later and it auto-appears with no code change. */
+     same 16:9 slot is reserved, so a card only grows downward and never widens
+     — the grid stays exactly as it is. If img/species/{id}.png exists it shows
+     framed; on a 404 the image onerror swap reveals the faint empty-plate frame
+     instead. Drop a matching file in later and it auto-appears with no code
+     change. */
   .kpi-plate{
-    margin:1.05rem 0 0;
+    margin:.8rem 0 .15rem;
     border:1px solid var(--line-strong);
     background:#17161a;
     padding:.34rem;
@@ -450,7 +450,7 @@
 <main>
   <div class="topbar">
     <p class="kicker">A live memorial</p>
-    <span class="version" id="version">v3.5</span>
+    <span class="version" id="version">v3.6</span>
   </div>
   <h1>Killed for food</h1>
 
@@ -911,6 +911,27 @@
       }
       li.appendChild(head);
 
+      // specimen plate — directly under the name. One rule for all cards: load
+      // img/species/{id-with-hyphens}.png; if it 404s (aquatic categories, or
+      // any species whose image isn't uploaded yet) the onerror handler swaps
+      // in the faint empty-plate placeholder. No per-card special-casing — drop
+      // a matching file in later and it just appears.
+      var plate = document.createElement("div");
+      plate.className = "kpi-plate";
+      var well = document.createElement("div");
+      well.className = "kpi-well";
+      var img = document.createElement("img");
+      img.className = "kpi-img";
+      img.loading = "lazy";
+      img.decoding = "async";
+      img.alt = "";                       // decorative — the species name heads the card
+      img.setAttribute("aria-hidden", "true");
+      img.addEventListener("error", function(){ plate.classList.add("is-empty"); });
+      img.src = "img/species/" + String(s.id || s.name || "").replace(/_/g, "-") + ".png";
+      well.appendChild(img);
+      plate.appendChild(well);
+      li.appendChild(plate);
+
       // the metric: killed so far this year (live, Flowing/Ticking)
       var big = document.createElement("div");
       big.className = "kpi-big";
@@ -964,27 +985,6 @@
           if(li.classList.contains("open")) drill.style.height = "auto";
         });
       }
-
-      // specimen plate — pinned at the foot of every card. One rule for all
-      // cards: load img/species/{id-with-hyphens}.png; if it 404s (aquatic
-      // categories, or any species whose image isn't uploaded yet) the onerror
-      // handler swaps in the faint empty-plate placeholder. No per-card
-      // special-casing — drop a matching file in later and it just appears.
-      var plate = document.createElement("div");
-      plate.className = "kpi-plate";
-      var well = document.createElement("div");
-      well.className = "kpi-well";
-      var img = document.createElement("img");
-      img.className = "kpi-img";
-      img.loading = "lazy";
-      img.decoding = "async";
-      img.alt = "";                       // decorative — the species name heads the card
-      img.setAttribute("aria-hidden", "true");
-      img.addEventListener("error", function(){ plate.classList.add("is-empty"); });
-      img.src = "img/species/" + String(s.id || s.name || "").replace(/_/g, "-") + ".png";
-      well.appendChild(img);
-      plate.appendChild(well);
-      li.appendChild(plate);
 
       ul.appendChild(li);
     });
