@@ -401,6 +401,11 @@
   }
   .kpi-plate.is-empty .kpi-well{background:transparent}
   .kpi-plate.is-empty .kpi-img{display:none}
+  /* photos switched off: drop every plate. Single column (phone): drop only the
+     empty placeholders — with no neighbouring card in the row to align to, the
+     reserved 16:9 slot is just dead space below the text. */
+  .species.no-photos .kpi-plate{display:none}
+  .species.single-col .kpi-plate.is-empty{display:none}
   .drill{
     overflow:hidden;height:0;
     transition:height .32s ease;
@@ -450,7 +455,7 @@
 <main>
   <div class="topbar">
     <p class="kicker">A live memorial</p>
-    <span class="version" id="version">v3.7</span>
+    <span class="version" id="version">v3.8</span>
   </div>
   <h1>Killed for food</h1>
 
@@ -518,6 +523,7 @@
         <button class="seg-opt" id="modeTicking" type="button" role="radio" aria-checked="false">Ticking</button>
       </div>
       <button class="tgl" id="tglOpened" type="button" role="switch" aria-checked="false"><span class="dot" aria-hidden="true"></span>show opened-at time</button>
+      <button class="tgl" id="tglPhotos" type="button" role="switch" aria-checked="true"><span class="dot" aria-hidden="true"></span>animal photos</button>
     </div>
   </div>
 
@@ -550,12 +556,13 @@
   function commas(n){ return fmt.format(Math.max(0, Math.floor(n))); }
 
   /* ---------- experimental display options ---------- */
-  var opts = { ticking:false, subOpened:false, seaBasis:"low", seaBivalve:false, seaOther:false, year:"avg" };
+  var opts = { ticking:false, subOpened:false, seaBasis:"low", seaBivalve:false, seaOther:false, year:"avg", photos:true };
   try {
     var saved = JSON.parse(localStorage.getItem("astc.opts") || "{}");
     if(saved && typeof saved === "object"){
       opts.ticking = !!saved.ticking;
       opts.subOpened = !!saved.subOpened;
+      opts.photos = (saved.photos !== false);   // species photos on unless turned off
       // sea estimate basis: low (default) | mid | high (migrate old boolean)
       opts.seaBasis = (saved.seaBasis === "mid" || saved.seaBasis === "high")
         ? saved.seaBasis : (saved.seaHigh ? "high" : "low");
@@ -721,17 +728,18 @@
   //   1 to <20/sec      floor to one decimal    "n / sec"
   //   < 1/sec           per-minute floored to one decimal "n / minute"; if that
   //                     is still < 1, scale up hour->day->week->year until >= 1.
-  function formatRate(annual){
+  function formatRate(annual, noun){
     var r = annual / SECONDS_PER_YEAR;
-    if(r >= 1000) return commas(Math.floor(r)) + " / sec";
+    var per = noun ? (" " + noun + " / ") : " / ";   // e.g. "2,000 chickens / sec"
+    if(r >= 1000) return commas(Math.floor(r)) + per + "sec";
     if(r >= 20){
       var n = (r - Math.floor(r) >= 0.89) ? Math.ceil(r) : Math.floor(r);
-      return commas(n) + " / sec";
+      return commas(n) + per + "sec";
     }
-    if(r >= 1) return fmtRate1.format(floor1(r)) + " / sec";
+    if(r >= 1) return fmtRate1.format(floor1(r)) + per + "sec";
     for(var i = 1; i < RATE_UNITS.length; i++){
       var v = r * RATE_UNITS[i][1];
-      if(v >= 1 || i === RATE_UNITS.length - 1) return fmtRate1.format(floor1(v)) + " / " + RATE_UNITS[i][0];
+      if(v >= 1 || i === RATE_UNITS.length - 1) return fmtRate1.format(floor1(v)) + per + RATE_UNITS[i][0];
     }
   }
 
@@ -793,6 +801,25 @@
     return box;
   }
 
+  // Single-column (phone) layout: a card spans (almost) the whole list width.
+  // The same signal drives placeholder-hiding (see updateColumns) and the
+  // tooltip placement below.
+  function isSingleColumn(){
+    var list = document.getElementById("speciesList");
+    var first = list && list.querySelector(".sp");
+    if(!list || !first) return false;
+    return first.getBoundingClientRect().width >= list.getBoundingClientRect().width - 2;
+  }
+  // Reflect column count + photo preference on the list so CSS can drop the
+  // empty placeholders when there's only one column (no row to align to) and
+  // hide every plate when photos are switched off.
+  function updateColumns(){
+    var list = document.getElementById("speciesList");
+    if(!list) return;
+    list.classList.toggle("single-col", isSingleColumn());
+    list.classList.toggle("no-photos", !opts.photos);
+  }
+
   // Position one card's tooltip relative to its ⓘ (the tip's offset parent).
   // Coordinates are worked out in viewport space, then converted to the
   // button's local space — correct under any ancestor transform, and the tip
@@ -805,23 +832,30 @@
     var vw = document.documentElement.clientWidth;
     var vh = document.documentElement.clientHeight;
     var content = cardContentRect(card);
+    var headEl = card.querySelector(".kpi-head");
+    var head = headEl ? headEl.getBoundingClientRect() : content;
     var anchor = btn.getBoundingClientRect();
     var tw = tip.offsetWidth, th = tip.offsetHeight;
+    var vpTop, vpLeft;
 
-    // vertical: prefer above the content, flip below when there is no room;
-    // if neither side fully fits, take the roomier one (clamped, never clipped)
-    var fitsAbove = th <= (content.top - GAP - EDGE);
-    var fitsBelow = th <= (vh - EDGE - (content.bottom + GAP));
-    var vpTop;
-    if(fitsAbove) vpTop = content.top - GAP - th;
-    else if(fitsBelow) vpTop = content.bottom + GAP;
-    else if((content.top - EDGE) >= (vh - content.bottom - EDGE)) vpTop = content.top - GAP - th;
-    else vpTop = content.bottom + GAP;
-    vpTop = Math.max(EDGE, Math.min(vpTop, vh - EDGE - th));
-
-    // horizontal: right-align to the ⓘ, then clamp within the viewport
-    var vpLeft = anchor.right - tw;
-    vpLeft = Math.max(EDGE, Math.min(vpLeft, vw - EDGE - tw));
+    if(isSingleColumn()){
+      // Phone: pin the tip directly above the card and let it ride with the
+      // card as the page scrolls. No viewport clamp — that clamp is what made
+      // it detach and hang at the top of the screen; here it just stays put
+      // above the card.
+      vpTop = content.top - GAP - th;
+      vpLeft = Math.max(EDGE, Math.min(content.left, vw - EDGE - tw));
+    } else {
+      // Desktop: prefer fully above the card, clear of everything. When there
+      // isn't room above, drop it just under the name and OVER the image —
+      // beside the ⓘ — instead of below the whole (now tall) card, which was
+      // too far away.
+      var fitsAbove = th <= (content.top - GAP - EDGE);
+      vpTop = fitsAbove ? (content.top - GAP - th) : (head.bottom + GAP);
+      vpLeft = anchor.right - tw;                          // right-aligned to the ⓘ
+      vpTop  = Math.max(EDGE, Math.min(vpTop,  vh - EDGE - th));
+      vpLeft = Math.max(EDGE, Math.min(vpLeft, vw - EDGE - tw));
+    }
 
     tip.style.position = "absolute";
     tip.style.left = (vpLeft - anchor.left) + "px";
@@ -904,10 +938,10 @@
       // subtle ⓘ in the card's top-right — one finalized rate per item
       if(s.id && speciesAnnual.hasOwnProperty(s.id)){
         // land species: static worldwide rate
-        head.appendChild(makeSpeciesInfo([{ value: formatRate(speciesAnnual[s.id]) }], landRateNote()));
+        head.appendChild(makeSpeciesInfo([{ value: formatRate(speciesAnnual[s.id], s.name.toLowerCase()) }], landRateNote()));
       } else if(s.sea){
         // aquatic category: rate at the selected Low/Mid/High basis
-        head.appendChild(makeSpeciesInfo([{ value: formatRate(s.count) }], aquaticRateNote()));
+        head.appendChild(makeSpeciesInfo([{ value: formatRate(s.count, s.name.toLowerCase()) }], aquaticRateNote()));
       }
       li.appendChild(head);
 
@@ -988,6 +1022,7 @@
 
       ul.appendChild(li);
     });
+    updateColumns();   // reflect column count / photo state on the freshly built list
   }
 
   function buildDrill(inner, s){
@@ -1353,6 +1388,16 @@
     reflect(tO,opts.subOpened);
     tO.addEventListener("click", function(){ opts.subOpened=!opts.subOpened; reflect(tO,opts.subOpened); saveOpts(); setSublineMode(); tick(true); });
 
+    // species photos on/off — hides/shows every plate (and, on phones, the
+    // placeholders are already dropped by updateColumns' single-col class).
+    var tPh = document.getElementById("tglPhotos");
+    reflect(tPh, opts.photos);
+    tPh.addEventListener("click", function(){
+      opts.photos = !opts.photos; reflect(tPh, opts.photos); saveOpts();
+      updateColumns();      // show/hide the plates
+      onViewportChange();   // keep any open card tooltip correctly placed
+    });
+
     // sea estimate basis (Low | Mid | High) — governs sea figures only; land is
     // reported data and unaffected. Recompute the current scope live.
     var basisBtns = {
@@ -1390,7 +1435,7 @@
     document.addEventListener("keydown", function(e){ if(e.key==="Escape") closeAllInfos(); });
     // keep an open card tooltip clear of content and on-screen as things move
     window.addEventListener("scroll", onViewportChange, true);
-    window.addEventListener("resize", onViewportChange);
+    window.addEventListener("resize", function(){ updateColumns(); onViewportChange(); });
 
     // footer provenance + figures. renderSrcLine reflects the selected world
     // year and is re-run when it changes; the rest is set once.
